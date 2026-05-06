@@ -1,0 +1,51 @@
+name = "OptimizationSNOPT"
+uuid = "aea88bd7-30e2-449a-bd52-cd945ed8a06f"
+version = "0.1.0"
+authors = ["Alex Pascarella <42875990+EllissoideRotondo@users.noreply.github.com>"]
+
+[workspace]
+projects = ["examples", "test"]
+
+[deps]
+ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
+DifferentiationInterface = "a0c0ee7d-e4b9-4e03-894e-1c5f64a51d63"
+FiniteDiff = "6a86dc24-6348-571c-b903-95158fe2bd41"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+OptimizationBase = "bca83a33-5cc9-4baa-983d-23429ab6bcbb"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
+SNOPT = "09fd284b-e7b0-4fba-b41f-c39527135ddd"
+SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
+SparseConnectivityTracer = "9f842d2f-2579-4b1d-911e-f412cf18a3f5"
+SparseMatrixColorings = "0a514795-09f3-496d-8182-132a7b665d35"
+SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
+
+[sources]
+SNOPT = {path = "../SNOPT"}
+
+[compat]
+LinearAlgebra = "1.10.0"
+ModelingToolkit = "11"
+OptimizationBase = "5.1"
+Printf = "1.10.0"
+Reexport = "1.2"
+SNOPT = "0.1.0"
+SciMLBase = "2.130.0, 3"
+SparseArrays = "1.10.0"
+SymbolicIndexingInterface = "0.3.40"
+Zygote = "0.7"
+julia = "1.10"
+
+[extras]
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
+ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
+
+[targets]
+test = ["Aqua", "ModelingToolkit", "Random", "ReverseDiff", "Test", "Symbolics", "Zygote"]

@@ -1,0 +1,11 @@
+[deps]
+ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
+FiniteDiff = "6a86dc24-6348-571c-b903-95158fe2bd41"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+OptimizationBase = "bca83a33-5cc9-4baa-983d-23429ab6bcbb"
+OptimizationSnopt = "aea88bd7-30e2-449a-bd52-cd945ed8a06f"
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
+
+[sources]
+OptimizationSnopt = {path = ".."}
