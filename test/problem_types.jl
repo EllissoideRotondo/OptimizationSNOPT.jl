@@ -1,4 +1,4 @@
-using OptimizationBase, OptimizationSnopt
+using OptimizationBase, OptimizationSNOPT
 using Test
 using LinearAlgebra
 using SparseArrays

@@ -10,6 +10,7 @@ struct SnoptTraceLevel
 end
 
 const SNOPT_DUAL_INFEASIBILITY_INDEX = 430
+const TRACE_HEADER_REPEAT_INTERVAL = 25
 
 function SnoptTraceMinimal(; print_frequency::Int = 1, store_frequency::Int = 1)
     print_frequency > 0 ||
@@ -123,6 +124,7 @@ mutable struct SnoptProgressLogger{C, I, A, S}
     last_optimality::Ref{Float64}
     ws_rw::Vector{Float64}
     pending_entry::Ref{Union{Nothing, SnoptTraceEntry}}
+    rows_printed::Ref{Int}
     trace_history::Vector{SnoptTraceEntry}
 end
 
@@ -175,6 +177,7 @@ function SnoptProgressLogger(
         Ref(NaN),
         ws_rw isa Vector{Float64} ? ws_rw : Float64.(ws_rw),
         Ref{Union{Nothing, SnoptTraceEntry}}(nothing),
+        Ref(0),
         SnoptTraceEntry[]
     )
 end
@@ -193,7 +196,13 @@ end
 
 function print_trace_algorithm(io::IO, algorithm)
     algorithm === nothing && return nothing
-    printstyled(io, trace_algorithm_block(algorithm); color = :green)
+    # Base.have_color is `nothing` until Julia resolves the terminal's color
+    # support, which never happens for redirected/non-TTY output (CI, Pkg.test).
+    # Coalesce to `false` so the IOContext color flag is always a Bool; passing
+    # `nothing` makes printstyled throw "non-boolean (Nothing) used in boolean
+    # context".
+    color = get(io, :color, something(Base.have_color, false))
+    printstyled(IOContext(io, :color => color), trace_algorithm_block(algorithm); color = :green)
     println(io)
     return nothing
 end
@@ -203,13 +212,13 @@ trace_float(value::Real) = isfinite(value) ? @sprintf("%.8e", Float64(value)) : 
 
 function print_trace_header(io::IO, level::SnoptTraceLevel)
     if level.trace_mode === :all
-        @printf io "%5s %5s %5s %14s %14s %14s %14s %14s\n" "-----" "-----" "-----" "--------------" "--------------" "--------------" "--------------" "--------------"
-        @printf io "%5s %5s %5s %14s %14s %14s %14s %14s\n" "Eval" "Major" "Minor" "Objective" "Constr viol" "Optimality" "Step" "Bound viol"
-        @printf io "%5s %5s %5s %14s %14s %14s %14s %14s\n" "-----" "-----" "-----" "--------------" "--------------" "--------------" "--------------" "--------------"
+        @printf io "%5s %5s %14s %14s %14s %14s %14s\n" "-----" "-----" "--------------" "--------------" "--------------" "--------------" "--------------"
+        @printf io "%5s %5s %14s %14s %14s %14s %14s\n" "Major" "Minor" "Objective" "Constr viol" "Optimality" "Step" "Bound viol"
+        @printf io "%5s %5s %14s %14s %14s %14s %14s\n" "-----" "-----" "--------------" "--------------" "--------------" "--------------" "--------------"
     else
-        @printf io "%5s %5s %5s %14s %14s %14s %14s\n" "-----" "-----" "-----" "--------------" "--------------" "--------------" "--------------"
-        @printf io "%5s %5s %5s %14s %14s %14s %14s\n" "Eval" "Major" "Minor" "Objective" "Constr viol" "Optimality" "Step"
-        @printf io "%5s %5s %5s %14s %14s %14s %14s\n" "-----" "-----" "-----" "--------------" "--------------" "--------------" "--------------"
+        @printf io "%5s %5s %14s %14s %14s %14s\n" "-----" "-----" "--------------" "--------------" "--------------" "--------------"
+        @printf io "%5s %5s %14s %14s %14s %14s\n" "Major" "Minor" "Objective" "Constr viol" "Optimality" "Step"
+        @printf io "%5s %5s %14s %14s %14s %14s\n" "-----" "-----" "--------------" "--------------" "--------------" "--------------"
     end
     return nothing
 end
@@ -223,7 +232,6 @@ function print_trace_header(cb::SnoptProgressLogger)
 end
 
 function print_trace_entry(io::IO, entry::SnoptTraceEntry, level::SnoptTraceLevel)
-    eval = entry.iteration < 0 ? "Final" : string(entry.iteration)
     major = trace_integer(entry.major_iter)
     minor = trace_integer(entry.minor_iter)
     objective = trace_float(entry.objective)
@@ -234,14 +242,14 @@ function print_trace_entry(io::IO, entry::SnoptTraceEntry, level::SnoptTraceLeve
 
     if entry.iteration < 0
         if level.trace_mode === :all
-            @printf io "%5s %5s %5s %14s %14s %14s %14s %14s\n" eval major minor objective constraint_violation optimality "-" bound_violation
+            @printf io "%5s %5s %14s %14s %14s %14s %14s\n" major minor objective constraint_violation optimality "-" bound_violation
         else
-            @printf io "%5s %5s %5s %14s %14s %14s %14s\n" eval major minor objective constraint_violation optimality "-"
+            @printf io "%5s %5s %14s %14s %14s %14s\n" major minor objective constraint_violation optimality "-"
         end
     elseif level.trace_mode === :all
-        @printf io "%5s %5s %5s %14s %14s %14s %14s %14s\n" eval major minor objective constraint_violation optimality step_norm bound_violation
+        @printf io "%5s %5s %14s %14s %14s %14s %14s\n" major minor objective constraint_violation optimality step_norm bound_violation
     else
-        @printf io "%5s %5s %5s %14s %14s %14s %14s\n" eval major minor objective constraint_violation optimality step_norm
+        @printf io "%5s %5s %14s %14s %14s %14s\n" major minor objective constraint_violation optimality step_norm
     end
     return nothing
 end
@@ -298,8 +306,13 @@ end
 
 function emit_trace_entry!(cb::SnoptProgressLogger, entry::SnoptTraceEntry)
     if trace_show_now(cb, entry)
-        print_trace_header(cb)
+        print_trace_header(cb)   # algorithm block + column header on first call
+        rows = cb.rows_printed[]
+        if entry.iteration >= 0 && rows > 0 && mod(rows, TRACE_HEADER_REPEAT_INTERVAL) == 0
+            print_trace_header(cb.trace_io, cb.trace_level)
+        end
         print_trace_entry(cb.trace_io, entry, cb.trace_level)
+        entry.iteration >= 0 && (cb.rows_printed[] += 1)
         flush(cb.trace_io)
     end
     trace_store_now(cb, entry) && push!(cb.trace_history, stored_trace_entry(cb, entry))

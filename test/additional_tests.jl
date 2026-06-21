@@ -1,9 +1,9 @@
-using OptimizationBase, OptimizationSnopt
+using OptimizationBase, OptimizationSNOPT
 using Test
 using LinearAlgebra
 using ADTypes, ForwardDiff
 
-@testset "Additional Snopt Examples" begin
+@testset "Additional SNOPT Examples" begin
     @testset "Simple 2D Example" begin
         # minimize -x[1] - x[2]
         # s.t. x[2] - x[1]^2 = 0,  -1 <= x[1] <= 1
@@ -115,6 +115,8 @@ using ADTypes, ForwardDiff
     end
 
     @testset "Mixed Integer-like Problem (Relaxed)" begin
+        # SNOPT is continuous; integer metadata follows OptimizationIpopt's
+        # convention here and solves the relaxed problem.
         # minimize x^2 + y^2, s.t. x + y >= 3.5, 0 <= x,y <= 5
         objective(x, p) = x[1]^2 + x[2]^2
 
@@ -130,6 +132,7 @@ using ADTypes, ForwardDiff
             optfunc, [2.0, 2.0], nothing;
             lb = [0.0, 0.0],
             ub = [5.0, 5.0],
+            int = [true, true],
             lcons = [3.5],
             ucons = [Inf]
         )

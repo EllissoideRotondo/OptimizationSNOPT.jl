@@ -1,10 +1,10 @@
-using OptimizationBase, OptimizationSnopt
+using OptimizationBase, OptimizationSNOPT
 using Test
 using LinearAlgebra
 using SparseArrays
 using ADTypes, ForwardDiff
 
-@testset "Advanced Snopt Features" begin
+@testset "Advanced SNOPT Features" begin
 
     @testset "Custom Tolerances" begin
         rosenbrock(x, p) = (p[1] - x[1])^2 + p[2] * (x[2] - x[1]^2)^2
@@ -213,6 +213,7 @@ using ADTypes, ForwardDiff
         sol = solve(prob, SnoptOptimizer(); maxiters = 200)
 
         @test SciMLBase.successful_retcode(sol)
+        @test sol.objective ≈ 0.0 atol = 1.0e-8
         for i in 1:n
             @test sol.u[i] ≈ i / 10 atol = 1.0e-5
         end

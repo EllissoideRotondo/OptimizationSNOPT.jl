@@ -32,7 +32,7 @@ The following common optimization arguments can be passed to `solve`:
 - `maxiters`: Overrides the `major_iterations_limit` option
 - `abstol`: Overrides the `major_optimality_tolerance` option
 - `reltol`: Overrides the `minor_feasibility_tolerance` option
-- `verbose`: When `true` or `Val(true)`, prints an OptimizationSnopt trace
+- `verbose`: When `true` or `Val(true)`, prints an OptimizationSNOPT trace
 - `show_trace`: Alias for `verbose`, following the SciML diagnostics API
 - `trace_level`: `SnoptTraceMinimal()` or `SnoptTraceAll()`; supports print/store frequency
 - `store_trace`: When `Val(true)`, stores the trace in `sol.original.trace`
@@ -60,11 +60,13 @@ The following common optimization arguments can be passed to `solve`:
   using strings or symbols as keys (spaces or underscores allowed, case-insensitive). Values
   may be integers, floats, strings/symbols for option words, or `nothing` for bare options.
   Keys and values are validated by SNOPT at construction time when `libsnopt7` is available.
+  Keys that duplicate an explicitly listed option above (e.g. `major_optimality_tolerance`)
+  are disallowed and raise an `ArgumentError` at construction time.
 
 # Examples
 
 ```julia
-using OptimizationBase, OptimizationSnopt
+using OptimizationBase, OptimizationSNOPT
 
 opt = SnoptOptimizer()
 
@@ -79,7 +81,7 @@ result = solve(prob, opt; maxiters = 500, abstol = 1e-8, verbose = Val(true))
 
 # References
 
-For complete documentation of all Snopt options, see:
+For complete documentation of all SNOPT options, see:
 https://ccom.ucsd.edu/~optimizers/docs/snopt/options.html
 """
 @kwdef struct SnoptOptimizer <: SciMLBase.AbstractOptimizationAlgorithm
@@ -166,7 +168,7 @@ snopt_show_trace(::Val{true}) = true
 snopt_show_trace(::Val{false}) = false
 snopt_show_trace(::SciMLLogging.None) = false
 snopt_show_trace(::SciMLLogging.AbstractVerbosityPreset) = true
-snopt_log_trace_available() = isdefined(Snopt, :SnoptMajorLog)
+snopt_log_trace_available() = isdefined(SNOPT, :SnoptMajorLog)
 
 function validate_integer_option(name::Symbol, value)
     value isa Integer && !(value isa Bool) ||
@@ -251,12 +253,33 @@ function normalize_snopt_option_value(key::String, value)
         "use an integer, float, string, symbol, or `nothing`"))
 end
 
+const SNOPT_RESERVED_OPTIONS = Dict{String, String}(
+    "Major print level"           => "major_print_level",
+    "Minor print level"           => "minor_print_level",
+    "Major iterations limit"      => "major_iterations_limit",
+    "Minor iterations limit"      => "minor_iterations_limit",
+    "Major optimality tolerance"  => "major_optimality_tolerance",
+    "Major feasibility tolerance" => "major_feasibility_tolerance",
+    "Minor feasibility tolerance" => "minor_feasibility_tolerance",
+    "Derivative option"           => "derivative_option",
+    "Hessian full memory"         => "hessian",
+    "Hessian limited memory"      => "hessian",
+)
+
 function validate_additional_options(options)
     options isa AbstractDict ||
         throw(ArgumentError("additional_options must be an AbstractDict, got $(typeof(options))"))
     normalized = Dict{String, Any}()
     for (key, value) in pairs(options)
         normalized_key = normalize_snopt_option_key(key)
+        if haskey(SNOPT_RESERVED_OPTIONS, normalized_key)
+            field = SNOPT_RESERVED_OPTIONS[normalized_key]
+            throw(ArgumentError(
+                "SNOPT option $(repr(normalized_key)) is already controlled by the " *
+                "`$(field)` keyword of SnoptOptimizer; " *
+                "pass it directly to the constructor instead of via additional_options"
+            ))
+        end
         haskey(normalized, normalized_key) &&
             throw(ArgumentError("duplicate SNOPT option key after normalization: $(repr(normalized_key))"))
         normalized[normalized_key] = normalize_snopt_option_value(normalized_key, value)
@@ -353,7 +376,7 @@ function apply_snopt_option!(ws, key::String, value)
 end
 
 function validate_snopt_option_pairs_with_library!(options)
-    Snopt.has_snopt() || return nothing
+    SNOPT.has_snopt() || return nothing
     ws = initialize("", "", 1000, 1000)
     try
         redirect_stdout(devnull) do
@@ -429,7 +452,7 @@ function configure_snopt_options!(
         abstol::Union{Number, Nothing} = nothing,
         reltol::Union{Number, Nothing} = nothing
     )
-    for (key, value) in snopt_optimizer_option_pairs(opt; include_print_levels = false)
+    for (key, value) in snopt_optimizer_option_pairs(opt)
         apply_snopt_option!(ws, key, value)
     end
 
@@ -438,8 +461,6 @@ function configure_snopt_options!(
     !isnothing(abstol)   && set_option!(ws, "Major optimality tolerance", Float64(abstol))
     !isnothing(reltol)   && set_option!(ws, "Minor feasibility tolerance", Float64(reltol))
 
-    set_option!(ws, "Major print level", 0)
-    set_option!(ws, "Minor print level", 0)
     set_option!(ws, "Solution = No")
 
     return ws
@@ -464,7 +485,7 @@ function snopt_workspace_lengths(
         nnCon = nc
         nnJac = nc > 0 ? n : 0
         nnObj = n
-        memory = Snopt.snmemb(mem_ws, m_eff, n, neJ, negCon, nnCon, nnJac, nnObj)
+        memory = SNOPT.snmemb(mem_ws, m_eff, n, neJ, negCon, nnCon, nnObj, nnJac)
         if memory.info == 100 || memory.info == 104
             return memory.miniw, memory.minrw
         end
@@ -565,7 +586,7 @@ function map_optimizer_args(
 
     configure_snopt_options!(ws, opt; maxiters, maxtime, abstol, reltol)
 
-    return SnoptB(ws, n, nc, m_eff, x_ext, bl, bu, hs, J, 0.0, 0, Float64[], objfun, active_confun), summfile, reader_task, show_output, logger
+    return SnoptB(ws, n, nc, m_eff, n, x_ext, bl, bu, hs, J, 0.0, 0, Float64[], objfun, active_confun), summfile, reader_task, show_output, logger
 end
 
 function check_and_convert_maxiters(maxiters::Nothing)
@@ -595,31 +616,54 @@ function check_and_convert_maxtime(maxtime)
     return maxtime
 end
 
+function check_and_convert_tolerance(name::Symbol, tolerance::Nothing)
+    return nothing
+end
+
+function check_and_convert_tolerance(name::Symbol, tolerance)
+    tolerance isa Real && !(tolerance isa Bool) ||
+        throw(ArgumentError("$(name) must be a real number, got $(repr(tolerance))"))
+    tolerance = Float64(tolerance)
+    isfinite(tolerance) ||
+        throw(ArgumentError("$(name) must be finite, got $tolerance"))
+    tolerance > 0 ||
+        throw(ArgumentError("$(name) must be > 0, got $tolerance"))
+    return tolerance
+end
+
 function map_retcode(inform::Int)
     if inform in (1, 2, 3, 4, 5, 6)
         return SciMLBase.ReturnCode.Success
     elseif inform in (11, 12, 13, 14, 15, 16)
         return SciMLBase.ReturnCode.Infeasible
     elseif inform in (21, 22)
-        return SciMLBase.ReturnCode.DivergeFailed
+        # Unbounded objective. SciMLBase has no dedicated "unbounded" code, so
+        # report a generic failure (the SNOPT inform is preserved in
+        # sol.original.inform). Note: ReturnCode has no `DivergeFailed`.
+        return SciMLBase.ReturnCode.Failure
     elseif inform in (31, 32, 33)
         return SciMLBase.ReturnCode.MaxIters
     elseif inform == 34
         return SciMLBase.ReturnCode.MaxTime
+    elseif inform in (71, 72, 73, 74)
+        return SciMLBase.ReturnCode.Terminated
     else
         return SciMLBase.ReturnCode.Failure
     end
 end
 
-function SciMLBase.__solve(cache::SnoptCache)
-    maxiters = check_and_convert_maxiters(cache.solver_args.maxiters)
-    maxtime  = check_and_convert_maxtime(cache.solver_args.maxtime)
-
+function run_snopt_attempt(
+        cache::SnoptCache,
+        maxiters::Union{Int, Nothing},
+        maxtime::Union{Float64, Nothing},
+        abstol::Union{Float64, Nothing},
+        reltol::Union{Float64, Nothing}
+    )
     opt_setup, _, _, _, logger = map_optimizer_args(
         cache,
         cache.opt;
-        abstol   = cache.solver_args.abstol,
-        reltol   = cache.solver_args.reltol,
+        abstol   = abstol,
+        reltol   = reltol,
         maxiters = maxiters,
         maxtime  = maxtime,
         verbose  = cache.solver_args.show_trace,
@@ -631,25 +675,55 @@ function SciMLBase.__solve(cache::SnoptCache)
 
     opt_setup.x[1:cache.n] .= cache.reinit_cache.u0
 
+    try
+        if logger.trace_from_snlog
+            snoptb!(opt_setup; snlog = logger)
+        else
+            snoptb!(opt_setup)
+        end
+    catch
+        finalize(opt_setup.ws)
+        rethrow()
+    end
+
+    return opt_setup, logger
+end
+
+function snopt_returned_without_evaluating(opt_setup)
+    return opt_setup.status == 0 &&
+           opt_setup.ws.major_itns == 0 &&
+           opt_setup.ws.iterations == 0
+end
+
+function SciMLBase.__solve(cache::SnoptCache)
+    maxiters = check_and_convert_maxiters(cache.solver_args.maxiters)
+    maxtime  = check_and_convert_maxtime(cache.solver_args.maxtime)
+    abstol   = check_and_convert_tolerance(:abstol, cache.solver_args.abstol)
+    reltol   = check_and_convert_tolerance(:reltol, cache.solver_args.reltol)
+
     start_time = time()
-    if logger.trace_from_snlog
-        snoptb!(opt_setup; snlog = logger)
-    else
-        snoptb!(opt_setup)
+    opt_setup, logger = run_snopt_attempt(cache, maxiters, maxtime, abstol, reltol)
+    if snopt_returned_without_evaluating(opt_setup)
+        finalize(opt_setup.ws)
+        @warn "SNOPT returned inform=0 without evaluating the problem; retrying once with a fresh workspace"
+        opt_setup, logger = run_snopt_attempt(cache, maxiters, maxtime, abstol, reltol)
     end
 
     # Read results before finalization in case f_snend touches the workspace arrays
     opt_ret    = map_retcode(opt_setup.status)
     minimizer  = opt_setup.ws.x[1:cache.n]
-    minimum    = opt_setup.obj_val
+    internal_minimum = opt_setup.obj_val
+    minimum    = cache.sense === OptimizationBase.MaxSense ? -internal_minimum : internal_minimum
     lambda     = copy(opt_setup.lambda[1:cache.n + cache.num_cons])
     iterations = opt_setup.ws.iterations
     major_itns = opt_setup.ws.major_itns
     num_inf    = opt_setup.ws.num_inf
     sum_inf    = opt_setup.ws.sum_inf
-    trace_objective = cache.sense === OptimizationBase.MaxSense ? -minimum : minimum
-    finish_trace!(logger, opt_setup.status, trace_objective;
-        major_iter = major_itns, minor_iter = iterations)
+    trace_objective = minimum
+    if !snopt_returned_without_evaluating(opt_setup)
+        finish_trace!(logger, opt_setup.status, trace_objective;
+            major_iter = major_itns, minor_iter = iterations)
+    end
     trace      = stored_trace(logger)
 
     # Call f_snend immediately rather than relying on the GC finalizer.
@@ -700,4 +774,4 @@ function SciMLBase.__init(
 end
 
 
-end # module OptimizationSnopt
+end # module OptimizationSNOPT

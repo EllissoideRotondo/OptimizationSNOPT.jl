@@ -1,7 +1,6 @@
 mutable struct SnoptCache{
         T, F <: OptimizationFunction, RC, LB, UB, I, S,
-        JT <: AbstractMatrix{T}, HT <: AbstractMatrix{T},
-        CHT <: AbstractMatrix{T}, CB, O,
+        JT <: AbstractMatrix{T}, CB, O,
     } <: SciMLBase.AbstractOptimizationCache
     const f::F
     const n::Int
@@ -14,8 +13,6 @@ mutable struct SnoptCache{
     const ucons::Vector{T}
     const sense::S
     J::JT
-    H::HT
-    cons_H::Vector{CHT}
     const callback::CB
     const progress::Bool
     f_calls::Int
@@ -106,15 +103,7 @@ function SnoptCache(
     )
     reinit_cache = OptimizationBase.ReInitCache(prob.u0, prob.p) # everything that can be changed via `reinit`
     show_trace = snopt_show_trace(verbose)
-
-    # Process verbose parameter: if it's a standard type (Bool/OptimizationVerbosity/Preset),
-    # convert it to OptimizationVerbosity. Otherwise pass it through as-is (e.g., Int for Ipopt)
-    final_verbose = if verbose isa Bool || verbose isa OptimizationBase.OptimizationVerbosity ||
-            verbose isa SciMLLogging.AbstractVerbosityPreset
-        getproperty(OptimizationBase, Symbol(Char(0x5f), "process_verbose_param"))(verbose)
-    else
-        verbose  # Solver-specific type (e.g., Int), use directly
-    end
+    final_verbose = verbose
 
     num_cons = prob.ucons === nothing ? 0 : length(prob.ucons)
     if prob.f.adtype isa ADTypes.AutoSymbolics || (
@@ -138,21 +127,6 @@ function SnoptCache(
         zeros(T, num_cons, n)
     else
         similar(f.cons_jac_prototype, T)
-    end
-    lagh = !isnothing(f.lag_hess_prototype)
-    H = if lagh # lag hessian takes precedence
-        similar(f.lag_hess_prototype, T)
-    elseif !isnothing(f.hess_prototype)
-        similar(f.hess_prototype, T)
-    else
-        zeros(T, n, n)
-    end
-    cons_H = if lagh
-        Matrix{T}[zeros(T, 0, 0) for i in 1:num_cons] # No need to allocate this up if using lag hessian
-    elseif isnothing(f.cons_hess_prototype)
-        Matrix{T}[zeros(T, n, n) for i in 1:num_cons]
-    else
-        [similar(f.cons_hess_prototype[i], T) for i in 1:num_cons]
     end
     lcons = prob.lcons === nothing ? fill(T(-Inf), num_cons) : prob.lcons
     ucons = prob.ucons === nothing ? fill(T(Inf), num_cons) : prob.ucons
@@ -180,8 +154,6 @@ function SnoptCache(
         ucons,
         prob.sense,
         J,
-        H,
-        cons_H,
         callback,
         progress,
         0,
@@ -262,126 +234,3 @@ function eval_constraint_jacobian(cache::SnoptCache, j, x)
     return
 end
 
-function hessian_lagrangian_structure(cache::SnoptCache)
-    lagh = cache.f.lag_h !== nothing
-    if cache.f.lag_hess_prototype isa SparseMatrixCSC
-        rows, cols, _ = findnz(cache.f.lag_hess_prototype)
-        return Tuple{Int, Int}[(i, j) for (i, j) in zip(rows, cols) if i <= j]
-    end
-    sparse_obj = cache.H isa SparseMatrixCSC
-    sparse_constraints = all(H -> H isa SparseMatrixCSC, cache.cons_H)
-    if !lagh && !sparse_constraints && any(H -> H isa SparseMatrixCSC, cache.cons_H)
-        # Some constraint hessians are dense and some are sparse! :(
-        error("Mix of sparse and dense constraint hessians are not supported")
-    end
-    N = length(cache.u0)
-    inds = if sparse_obj
-        rows, cols, _ = findnz(cache.H)
-        Tuple{Int, Int}[(i, j) for (i, j) in zip(rows, cols) if i <= j]
-    else
-        Tuple{Int, Int}[(row, col) for col in 1:N for row in 1:col]
-    end
-    lagh && return inds
-    if sparse_constraints
-        for Hi in cache.cons_H
-            r, c, _ = findnz(Hi)
-            for (i, j) in zip(r, c)
-                if i <= j
-                    push!(inds, (i, j))
-                end
-            end
-        end
-    elseif !sparse_obj
-        # Performance OptimizationBase. If both are dense, no need to repeat
-    else
-        for col in 1:N, row in 1:col
-            push!(inds, (row, col))
-        end
-    end
-    return inds
-end
-
-function eval_hessian_lagrangian(
-        cache::SnoptCache{T},
-        h,
-        x,
-        σ,
-        μ
-    ) where {T}
-    if cache.f.lag_h !== nothing
-        cache.f.lag_h(h, x, σ, Vector(μ))
-
-        if cache.sense === OptimizationBase.MaxSense
-            h .*= -one(eltype(h))
-        end
-
-        return
-    end
-    if cache.f.hess === nothing
-        error(
-            "Use OptimizationFunction to pass the objective hessian or " *
-                "automatically generate it with one of the autodiff backends." *
-                "If you are using the ModelingToolkit symbolic interface, pass the `hess` kwarg set to `true` in `OptimizationProblem`."
-        )
-    end
-    # Get and cache the Hessian object here once. `evaluator.H` calls
-    # `getproperty`, which is expensive because it calls `fieldnames`.
-    H = cache.H
-    fill!(h, zero(T))
-    k = 0
-    cache.f.hess(H, x)
-    sparse_objective = H isa SparseMatrixCSC
-    if sparse_objective
-        rows, cols, _ = findnz(H)
-        for (i, j) in zip(rows, cols)
-            if i <= j
-                k += 1
-                h[k] = σ * H[i, j]
-            end
-        end
-    else
-        for i in 1:size(H, 1), j in 1:i
-            k += 1
-            h[k] = σ * H[i, j]
-        end
-    end
-    # A count of the number of non-zeros in the objective Hessian is needed if
-    # the constraints are dense.
-    nnz_objective = k
-    if !isempty(μ) && !all(iszero, μ)
-        if cache.f.cons_h === nothing
-            error(
-                "Use OptimizationFunction to pass the constraints' hessian or " *
-                    "automatically generate it with one of the autodiff backends." *
-                    "If you are using the ModelingToolkit symbolic interface, pass the `cons_h` kwarg set to `true` in `OptimizationProblem`."
-            )
-        end
-        cache.f.cons_h(cache.cons_H, x)
-        for (μi, Hi) in zip(μ, cache.cons_H)
-            if Hi isa SparseMatrixCSC
-                rows, cols, _ = findnz(Hi)
-                for (i, j) in zip(rows, cols)
-                    if i <= j
-                        k += 1
-                        h[k] += μi * Hi[i, j]
-                    end
-                end
-            else
-                # The constraints are dense. We only store one copy of the
-                # Hessian, so reset `k` to where it starts. That will be
-                # `nnz_objective` if the objective is sprase, and `0` otherwise.
-                k = sparse_objective ? nnz_objective : 0
-                for i in 1:size(Hi, 1), j in 1:i
-                    k += 1
-                    h[k] += μi * Hi[i, j]
-                end
-            end
-        end
-    end
-
-    if cache.sense === OptimizationBase.MaxSense
-        h .*= -one(eltype(h))
-    end
-
-    return
-end

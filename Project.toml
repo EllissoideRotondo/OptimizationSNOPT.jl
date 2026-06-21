@@ -1,6 +1,6 @@
 name = "OptimizationSNOPT"
 uuid = "aea88bd7-30e2-449a-bd52-cd945ed8a06f"
-version = "0.1.0"
+version = "0.2.1"
 authors = ["Alex Pascarella <42875990+EllissoideRotondo@users.noreply.github.com>"]
 
 [workspace]
@@ -31,7 +31,7 @@ ModelingToolkit = "11"
 OptimizationBase = "5.1"
 Printf = "1.10.0"
 Reexport = "1.2"
-SNOPT = "0.1.0"
+SNOPT = "0.2"
 SciMLBase = "2.130.0, 3"
 SparseArrays = "1.10.0"
 SymbolicIndexingInterface = "0.3.40"
