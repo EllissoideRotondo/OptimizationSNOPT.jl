@@ -466,11 +466,9 @@ function trace_snlog!(cb::SnoptProgressLogger, event)
     return nothing
 end
 
-if isdefined(SNOPT, :SnoptMajorLog)
-    @eval function (cb::SnoptProgressLogger)(event::$(getproperty(SNOPT, :SnoptMajorLog)))
-        trace_snlog!(cb, event)
-        return true
-    end
+function (cb::SnoptProgressLogger)(event::SNOPT.SnoptMajorLog)
+    trace_snlog!(cb, event)
+    return true
 end
 
 function trace_constraints!(

@@ -19,7 +19,7 @@ using Pkg
 Pkg.activate(@__DIR__)
 
 using OptimizationBase
-using OptimizationSnopt
+using OptimizationSNOPT
 using ADTypes, ForwardDiff, FiniteDiff
 
 # Objective

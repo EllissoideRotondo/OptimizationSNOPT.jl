@@ -7,13 +7,32 @@ using LinearAlgebra
 using Printf
 using SparseArrays
 using SciMLBase
+using SciMLLogging
+using ADTypes
 using SymbolicIndexingInterface
+# Load the common AD backends (and the sparse-AD stack) so ADTypes selectors
+# like AutoForwardDiff(), AutoFiniteDiff(), and AutoSparse(...) work without
+# the user importing the backend packages themselves — the backends only
+# activate DifferentiationInterface's extensions once they are loaded.
+import DifferentiationInterface
+import FiniteDiff
+import ForwardDiff
+import SparseConnectivityTracer
+import SparseMatrixColorings
 
 export SnoptOptimizer
 export SnoptTrace
 export SnoptTraceAll
 export SnoptTraceEntry
 export SnoptTraceMinimal
+
+# SNOPT keeps global Fortran state: there is exactly one active workspace per
+# process, and creating a new one finalizes the previous one. This lock
+# serializes every code path that creates or drives a SNOPT workspace so that
+# concurrent `solve` calls from different tasks/threads cannot corrupt each
+# other mid-solve. Solves are therefore serialized, never parallel; use
+# multiple Julia processes for parallel SNOPT solves.
+const SNOPT_GLOBAL_LOCK = ReentrantLock()
 
 """
     SnoptOptimizer(; kwargs...)
@@ -62,6 +81,19 @@ The following common optimization arguments can be passed to `solve`:
   Keys and values are validated by SNOPT at construction time when `libsnopt7` is available.
   Keys that duplicate an explicitly listed option above (e.g. `major_optimality_tolerance`)
   are disallowed and raise an `ArgumentError` at construction time.
+
+# Notes
+
+  * **Concurrency.** SNOPT keeps global Fortran state (one active workspace per
+    process). Concurrent `solve` calls are serialized by an internal lock, so
+    threaded callers are safe but never run SNOPT in parallel; use multiple
+    Julia processes for parallel solves.
+  * **Construction side effect.** When `libsnopt7` is available, the
+    constructor validates all options against the library using a temporary
+    SNOPT workspace. By SNOPT's single-active-workspace rule this closes any
+    manually managed `SNOPT.initialize` workspace currently open in the
+    process, so construct optimizers before setting up low-level SNOPT.jl
+    problems.
 
 # Examples
 
@@ -168,7 +200,6 @@ snopt_show_trace(::Val{true}) = true
 snopt_show_trace(::Val{false}) = false
 snopt_show_trace(::SciMLLogging.None) = false
 snopt_show_trace(::SciMLLogging.AbstractVerbosityPreset) = true
-snopt_log_trace_available() = isdefined(SNOPT, :SnoptMajorLog)
 
 function validate_integer_option(name::Symbol, value)
     value isa Integer && !(value isa Bool) ||
@@ -377,17 +408,22 @@ end
 
 function validate_snopt_option_pairs_with_library!(options)
     SNOPT.has_snopt() || return nothing
-    ws = initialize("", "", 1000, 1000)
-    try
-        redirect_stdout(devnull) do
-            redirect_stderr(devnull) do
-                for (key, value) in options
-                    apply_snopt_option!(ws, key, value)
+    # Note: this creates (and closes) a temporary SNOPT workspace, which — by
+    # SNOPT's single-active-workspace rule — finalizes any manually managed
+    # SNOPT.jl workspace that is currently open in the process.
+    lock(SNOPT_GLOBAL_LOCK) do
+        ws = initialize("", "", 1000, 1000)
+        try
+            redirect_stdout(devnull) do
+                redirect_stderr(devnull) do
+                    for (key, value) in options
+                        apply_snopt_option!(ws, key, value)
+                    end
                 end
             end
+        finally
+            finalize(ws)
         end
-    finally
-        finalize(ws)
     end
     return nothing
 end
@@ -419,30 +455,6 @@ function validate_snopt_optimizer_options!(
     validate_snopt_option_pairs_with_library!(options)
     return nothing
 end
-
-function heuristic_snopt_workspace_lengths(n::Int, m_eff::Int, neJ::Int)
-    n > 0 || throw(ArgumentError("n must be positive, got $n"))
-    m_eff > 0 || throw(ArgumentError("m_eff must be positive, got $m_eff"))
-    neJ >= 0 || throw(ArgumentError("neJ must be nonnegative, got $neJ"))
-
-    # SNOPT's manual gives 100(m+n) integer and 200(m+n) real slots as only
-    # estimates; dense constrained problems need extra room for factorization.
-    total = n + m_eff
-    leniw = max(
-        30500,
-        500 + 100 * total,
-        500 + 100 * total + 10 * neJ
-    )
-    lenrw = max(
-        m_eff > 1 ? 30500 : 3000,
-        500 + 200 * total,
-        500 + 500 * total + 20 * neJ
-    )
-    return leniw, lenrw
-end
-
-snopt_workspace_lengths(n::Int, m_eff::Int, neJ::Int) =
-    heuristic_snopt_workspace_lengths(n, m_eff, neJ)
 
 function configure_snopt_options!(
         ws,
@@ -517,6 +529,11 @@ function map_optimizer_args(
     user_ub = isnothing(cache.ub) ? fill(Inf,  n) : Vector{Float64}(cache.ub)
     user_lcons = nc > 0 ? Vector{Float64}(cache.lcons) : Float64[]
     user_ucons = nc > 0 ? Vector{Float64}(cache.ucons) : Float64[]
+    for (name, values) in (("lb", user_lb), ("ub", user_ub),
+                           ("lcons", user_lcons), ("ucons", user_ucons))
+        any(isnan, values) &&
+            throw(ArgumentError("$name must not contain NaN"))
+    end
     lb = snopt_bound_vector(user_lb)
     ub = snopt_bound_vector(user_ub)
     bl = vcat(lb, nc > 0 ? snopt_bound_vector(user_lcons) : [-SNOPT_BOUND_INF])
@@ -546,47 +563,53 @@ function map_optimizer_args(
         n, m_eff, nc, J, opt; maxiters, maxtime, abstol, reltol)
 
     show_output = snopt_show_trace(verbose)
-    trace_from_snlog = snopt_log_trace_available() &&
-        (show_output || snopt_store_trace(store_trace))
+    trace_from_snlog = show_output || snopt_store_trace(store_trace)
     # Keep SNOPT's own print/summary files disabled. Verbose output is produced
     # synchronously by the Julia callback below, so Windows and single-threaded
     # runs do not buffer the whole SNOPT summary until finalization.
-    summfile, reader_task = "", nothing
     ws = initialize("", "", leniw, lenrw)
+    try
+        logger = SnoptProgressLogger(
+            progress, callback, show_output, n, maxiters, cache.iterations;
+            trace_level, store_trace, lb = user_lb, ub = user_ub,
+            lcon = user_lcons,
+            ucon = user_ucons,
+            algorithm = opt,
+            sense = cache.sense,
+            ws_rw = ws.rw,
+            trace_from_snlog
+        )
 
-    logger = SnoptProgressLogger(
-        progress, callback, show_output, n, maxiters, cache.iterations;
-        trace_level, store_trace, lb = user_lb, ub = user_ub,
-        lcon = user_lcons,
-        ucon = user_ucons,
-        algorithm = opt,
-        sense = cache.sense,
-        ws_rw = ws.rw,
-        trace_from_snlog
-    )
-
-    objfun = make_objfun(
-        x -> eval_objective(cache, x),
-        (g, x) -> eval_objective_gradient(cache, g, x),
-        ws.iw;
-        callback = logger
-    )
-
-    active_confun = if nc > 0
-        make_confun(
-            (c, x) -> eval_constraint(cache, c, x),
-            (jnzval, x) -> eval_constraint_jacobian(cache, jnzval, x),
-            J,
+        objfun = make_objfun(
+            x -> eval_objective(cache, x),
+            (g, x) -> eval_objective_gradient(cache, g, x),
             ws.iw;
             callback = logger
         )
-    else
-        make_dummy_confun()
+
+        active_confun = if nc > 0
+            make_confun(
+                (c, x) -> eval_constraint(cache, c, x),
+                (jnzval, x) -> eval_constraint_jacobian(cache, jnzval, x),
+                J,
+                ws.iw;
+                callback = logger
+            )
+        else
+            make_dummy_confun()
+        end
+
+        configure_snopt_options!(ws, opt; maxiters, maxtime, abstol, reltol)
+
+        return SnoptB(ws, n, nc, m_eff, n, x_ext, bl, bu, hs, J,
+                      0.0, 0, Float64[], objfun, active_confun), logger
+    catch
+        # Do not leave a half-configured workspace alive until the GC runs
+        # (e.g. when SNOPT rejects an option that was valid at construction
+        # time but not for this solve, such as "Time limit" on older builds).
+        finalize(ws)
+        rethrow()
     end
-
-    configure_snopt_options!(ws, opt; maxiters, maxtime, abstol, reltol)
-
-    return SnoptB(ws, n, nc, m_eff, n, x_ext, bl, bu, hs, J, 0.0, 0, Float64[], objfun, active_confun), summfile, reader_task, show_output, logger
 end
 
 function check_and_convert_maxiters(maxiters::Nothing)
@@ -641,10 +664,12 @@ function map_retcode(inform::Int)
         # report a generic failure (the SNOPT inform is preserved in
         # sol.original.inform). Note: ReturnCode has no `DivergeFailed`.
         return SciMLBase.ReturnCode.Failure
-    elseif inform in (31, 32, 33)
+    elseif inform in (31, 32)
         return SciMLBase.ReturnCode.MaxIters
     elseif inform == 34
         return SciMLBase.ReturnCode.MaxTime
+        # 33 ("superbasics limit is too small") is a sizing failure, not an
+        # iteration limit, and falls through to Failure below.
     elseif inform in (71, 72, 73, 74)
         return SciMLBase.ReturnCode.Terminated
     else
@@ -659,7 +684,7 @@ function run_snopt_attempt(
         abstol::Union{Float64, Nothing},
         reltol::Union{Float64, Nothing}
     )
-    opt_setup, _, _, _, logger = map_optimizer_args(
+    opt_setup, logger = map_optimizer_args(
         cache,
         cache.opt;
         abstol   = abstol,
@@ -700,21 +725,39 @@ function SciMLBase.__solve(cache::SnoptCache)
     maxtime  = check_and_convert_maxtime(cache.solver_args.maxtime)
     abstol   = check_and_convert_tolerance(:abstol, cache.solver_args.abstol)
     reltol   = check_and_convert_tolerance(:reltol, cache.solver_args.reltol)
+    all(isfinite, cache.reinit_cache.u0) ||
+        throw(ArgumentError("u0 must contain only finite values"))
+
+    # Evaluation counters are per-solve statistics; reset them so repeated
+    # solve!(cache) calls do not accumulate across solves.
+    cache.f_calls = 0
+    cache.f_grad_calls = 0
+    cache.iterations[] = 0
 
     start_time = time()
-    opt_setup, logger = run_snopt_attempt(cache, maxiters, maxtime, abstol, reltol)
-    if snopt_returned_without_evaluating(opt_setup)
-        finalize(opt_setup.ws)
-        @warn "SNOPT returned inform=0 without evaluating the problem; retrying once with a fresh workspace"
+    opt_setup, logger, minimizer, lambda = lock(SNOPT_GLOBAL_LOCK) do
         opt_setup, logger = run_snopt_attempt(cache, maxiters, maxtime, abstol, reltol)
+        if snopt_returned_without_evaluating(opt_setup)
+            finalize(opt_setup.ws)
+            @warn "SNOPT returned inform=0 without evaluating the problem; retrying once with a fresh workspace"
+            opt_setup, logger = run_snopt_attempt(cache, maxiters, maxtime, abstol, reltol)
+        end
+
+        # Read results before finalization in case f_snend touches the
+        # workspace arrays.
+        minimizer = opt_setup.ws.x[1:cache.n]
+        lambda    = copy(opt_setup.lambda[1:cache.n + cache.num_cons])
+
+        # Call f_snend immediately rather than relying on the GC finalizer.
+        # SNOPT7 has global Fortran state; without this, a second solve in the
+        # same process sees stale state and returns instantly with inform=0.
+        finalize(opt_setup.ws)
+        opt_setup, logger, minimizer, lambda
     end
 
-    # Read results before finalization in case f_snend touches the workspace arrays
     opt_ret    = map_retcode(opt_setup.status)
-    minimizer  = opt_setup.ws.x[1:cache.n]
     internal_minimum = opt_setup.obj_val
     minimum    = cache.sense === OptimizationBase.MaxSense ? -internal_minimum : internal_minimum
-    lambda     = copy(opt_setup.lambda[1:cache.n + cache.num_cons])
     iterations = opt_setup.ws.iterations
     major_itns = opt_setup.ws.major_itns
     num_inf    = opt_setup.ws.num_inf
@@ -725,11 +768,6 @@ function SciMLBase.__solve(cache::SnoptCache)
             major_iter = major_itns, minor_iter = iterations)
     end
     trace      = stored_trace(logger)
-
-    # Call f_snend immediately rather than relying on the GC finalizer.
-    # SNOPT7 has global Fortran state; without this, a second solve in the same
-    # process sees stale state and returns instantly with inform=0.
-    finalize(opt_setup.ws)
 
     if cache.progress
         Base.@logmsg(Base.LogLevel(-1), "", progress = 1)

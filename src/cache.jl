@@ -101,25 +101,21 @@ function SnoptCache(
         store_trace = Val(false),
         kwargs...
     )
+    if prob.int !== nothing && any(prob.int)
+        # Follow OptimizationIpopt's convention: solve the continuous
+        # relaxation, but say so instead of silently dropping integrality.
+        @warn "SNOPT is a continuous NLP solver; integer variables (`int` in " *
+              "OptimizationProblem) are relaxed and solved as continuous"
+    end
     reinit_cache = OptimizationBase.ReInitCache(prob.u0, prob.p) # everything that can be changed via `reinit`
     show_trace = snopt_show_trace(verbose)
     final_verbose = verbose
 
     num_cons = prob.ucons === nothing ? 0 : length(prob.ucons)
-    if prob.f.adtype isa ADTypes.AutoSymbolics || (
-            prob.f.adtype isa ADTypes.AutoSparse &&
-                prob.f.adtype.dense_ad isa ADTypes.AutoSymbolics
-        )
-        f = OptimizationBase.instantiate_function(
-            prob.f, reinit_cache, prob.f.adtype, num_cons;
-            g = true, cons_j = true
-        )
-    else
-        f = OptimizationBase.instantiate_function(
-            prob.f, reinit_cache, prob.f.adtype, num_cons;
-            g = true, cons_j = true
-        )
-    end
+    f = OptimizationBase.instantiate_function(
+        prob.f, reinit_cache, prob.f.adtype, num_cons;
+        g = true, cons_j = true
+    )
     T = eltype(prob.u0)
     n = length(prob.u0)
 
@@ -181,7 +177,7 @@ function eval_objective_gradient(cache::SnoptCache, G, x)
     if cache.f.grad === nothing
         error(
             "Use OptimizationFunction to pass the objective gradient or " *
-                "automatically generate it with one of the autodiff backends." *
+                "automatically generate it with one of the autodiff backends. " *
                 "If you are using the ModelingToolkit symbolic interface, pass the `grad` kwarg set to `true` in `OptimizationProblem`."
         )
     end
@@ -195,24 +191,13 @@ function eval_objective_gradient(cache::SnoptCache, G, x)
     return
 end
 
-function jacobian_structure(cache::SnoptCache)
-    if cache.J isa SparseMatrixCSC
-        rows, cols, _ = findnz(cache.J)
-        inds = Tuple{Int, Int}[(i, j) for (i, j) in zip(rows, cols)]
-    else
-        rows, cols = size(cache.J)
-        inds = Tuple{Int, Int}[(i, j) for j in 1:cols for i in 1:rows]
-    end
-    return inds
-end
-
 function eval_constraint_jacobian(cache::SnoptCache, j, x)
     if isempty(j)
         return
     elseif cache.f.cons_j === nothing
         error(
             "Use OptimizationFunction to pass the constraints' jacobian or " *
-                "automatically generate i with one of the autodiff backends." *
+                "automatically generate it with one of the autodiff backends. " *
                 "If you are using the ModelingToolkit symbolic interface, pass the `cons_j` kwarg set to `true` in `OptimizationProblem`."
         )
     end

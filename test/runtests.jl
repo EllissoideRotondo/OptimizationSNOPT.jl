@@ -1,4 +1,5 @@
 using OptimizationBase, OptimizationSNOPT
+using SciMLBase
 using SNOPT
 using Zygote
 using Symbolics
@@ -6,6 +7,11 @@ using Test
 using SparseArrays
 using ModelingToolkit
 using ReverseDiff
+using Aqua
+
+@testset "Aqua" begin
+    Aqua.test_all(OptimizationSNOPT)
+end
 
 @testset "SnoptOptimizer validation" begin
     @test_throws ArgumentError SnoptOptimizer(major_print_level = -1)
@@ -60,7 +66,12 @@ using ReverseDiff
     @test_throws ArgumentError OptimizationSNOPT.check_and_convert_tolerance(:abstol, 0.0)
     @test_throws ArgumentError OptimizationSNOPT.check_and_convert_tolerance(:reltol, -1.0)
     @test_throws ArgumentError OptimizationSNOPT.check_and_convert_tolerance(:reltol, NaN)
-    @test OptimizationSNOPT.map_retcode(33) == SciMLBase.ReturnCode.MaxIters
+    @test OptimizationSNOPT.map_retcode(31) == SciMLBase.ReturnCode.MaxIters
+    @test OptimizationSNOPT.map_retcode(32) == SciMLBase.ReturnCode.MaxIters
+    # 33 is SNOPT's "superbasics limit is too small" — a sizing failure, not an
+    # iteration limit.
+    @test OptimizationSNOPT.map_retcode(33) == SciMLBase.ReturnCode.Failure
+    @test OptimizationSNOPT.map_retcode(34) == SciMLBase.ReturnCode.MaxTime
     @test OptimizationSNOPT.map_retcode(73) == SciMLBase.ReturnCode.Terminated
     # Unbounded (SNOPT inform 21/22) must map to an existing ReturnCode.
     @test OptimizationSNOPT.map_retcode(21) == SciMLBase.ReturnCode.Failure
@@ -84,12 +95,6 @@ end
     @test !OptimizationSNOPT.snopt_show_trace(false)
     @test !OptimizationSNOPT.snopt_show_trace(Val(false))
     @test !OptimizationSNOPT.snopt_show_trace(OptimizationBase.DEFAULT_VERBOSE)
-
-    leniw, lenrw = OptimizationSNOPT.snopt_workspace_lengths(100, 100, 10_000)
-    @test leniw >= 500 + 100 * (100 + 100)
-    @test lenrw >= 500 + 200 * (100 + 100)
-    @test leniw > 30_500
-    @test lenrw > 40_500
 
     io = IOBuffer()
     logger = OptimizationSNOPT.SnoptProgressLogger(
@@ -163,7 +168,7 @@ end
     @test stored.history[1].c == [1.5]
     @test stored.history[1].optimality == 0.25
 
-    if isdefined(SNOPT, :SnoptMajorLog)
+    begin
         io = IOBuffer()
         snlog_logger = OptimizationSNOPT.SnoptProgressLogger(
             false, nothing, true, 2, nothing, Ref(0), io;
@@ -313,20 +318,48 @@ end
     )
     cache = init(prob, SnoptOptimizer())
     @test cache isa OptimizationSNOPT.SnoptCache
-    opt_setup, summfile, reader_task, show_output, logger = OptimizationSNOPT.map_optimizer_args(cache, cache.opt)
+    opt_setup, logger = OptimizationSNOPT.map_optimizer_args(cache, cache.opt)
     @test opt_setup isa SNOPT.SnoptB
     @test all(isfinite, opt_setup.bl)
     @test all(isfinite, opt_setup.bu)
     @test opt_setup.bl[end] == -OptimizationSNOPT.SNOPT_BOUND_INF
     @test opt_setup.bu[end] == OptimizationSNOPT.SNOPT_BOUND_INF
-    @test isnothing(reader_task)
-    @test summfile == ""
-    @test !show_output
     @test logger isa OptimizationSNOPT.SnoptProgressLogger
     finalize(opt_setup.ws)
     sol = solve!(cache)
     @test SciMLBase.successful_retcode(sol)
     @test sol.u ≈ [1.0, 1.0] atol = 1.0e-4
+
+    # Evaluation counters are per-solve: a second solve! must not accumulate
+    # the first solve's counts.
+    sol2 = solve!(cache)
+    @test SciMLBase.successful_retcode(sol2)
+    @test sol2.stats.fevals == sol.stats.fevals
+    @test sol2.stats.gevals == sol.stats.gevals
+end
+
+@testset "Input validation (int variables, NaN)" begin
+    quad(x, p) = (x[1] - 1)^2 + x[2]^2
+    optfunc = OptimizationFunction(quad, AutoForwardDiff())
+
+    # Integer metadata is relaxed (OptimizationIpopt convention), but loudly.
+    int_prob = OptimizationProblem(optfunc, zeros(2), nothing; int = [true, false])
+    @test_logs (:warn, r"integer variables .* are relaxed") match_mode=:any begin
+        init(int_prob, SnoptOptimizer())
+    end
+
+    nan_u0 = OptimizationProblem(optfunc, [NaN, 0.0], nothing)
+    @test_throws ArgumentError solve(nan_u0, SnoptOptimizer())
+
+    nan_lb = OptimizationProblem(optfunc, zeros(2), nothing;
+        lb = [NaN, -1.0], ub = [1.0, 1.0])
+    @test_throws ArgumentError solve(nan_lb, SnoptOptimizer())
+
+    nan_ucons = OptimizationProblem(
+        OptimizationFunction(quad, AutoForwardDiff();
+            cons = (res, x, p) -> (res[1] = x[1] + x[2])),
+        zeros(2), nothing; lcons = [0.0], ucons = [NaN])
+    @test_throws ArgumentError solve(nan_ucons, SnoptOptimizer())
 end
 
 @testset "Common interface arguments" begin

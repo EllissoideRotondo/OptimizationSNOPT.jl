@@ -1,0 +1,41 @@
+name: CI
+
+# Run on pushes to any branch in this repo. Only collaborators can push branches
+# here, so this covers all branches you own while excluding external pull requests.
+on:
+  push:
+    branches: ['**']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # GitHub-hosted runners have no SNOPT license/library, so the test suite
+    # skips every solver assertion: this job only checks that the package loads
+    # and that the library-free paths behave. The full suite runs locally
+    # (Linux + Windows VM) against a licensed libsnopt7.
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }} (no solver lib)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['1.10', '1']
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      # The [sources] entry in Project.toml expects SNOPT.jl as a sibling
+      # directory until SNOPT is registered in General.
+      - uses: actions/checkout@v4
+        with:
+          path: OptimizationSNOPT
+      - uses: actions/checkout@v4
+        with:
+          repository: EllissoideRotondo/SNOPT.jl
+          path: SNOPT
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+      - uses: julia-actions/cache@v2
+      - name: Instantiate and test
+        run: julia --project=OptimizationSNOPT -e 'using Pkg; Pkg.instantiate(); Pkg.test("OptimizationSNOPT")'

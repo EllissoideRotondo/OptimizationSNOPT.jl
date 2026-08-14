@@ -26,3 +26,4 @@ Manifest.toml
 *-workspace
 /.codex
 /.claude
+.vscode/
