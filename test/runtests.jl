@@ -89,6 +89,8 @@ end
     )
 end
 
+include("trace_contracts.jl")
+
 @testset "Adapter logging and workspace sizing" begin
     @test OptimizationSNOPT.snopt_show_trace(true)
     @test OptimizationSNOPT.snopt_show_trace(Val(true))

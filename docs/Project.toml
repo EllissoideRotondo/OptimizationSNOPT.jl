@@ -1,0 +1,11 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+OptimizationSNOPT = "aea88bd7-30e2-449a-bd52-cd945ed8a06f"
+SNOPT = "09fd284b-e7b0-4fba-b41f-c39527135ddd"
+
+[sources]
+OptimizationSNOPT = {path = ".."}
+SNOPT = {path = "../../SNOPT"}
+
+[compat]
+Documenter = "1"

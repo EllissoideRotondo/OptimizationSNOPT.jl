@@ -12,27 +12,55 @@ end
 const SNOPT_DUAL_INFEASIBILITY_INDEX = 430
 const TRACE_HEADER_REPEAT_INTERVAL = 25
 
-function SnoptTraceMinimal(; print_frequency::Int = 1, store_frequency::Int = 1)
-    print_frequency > 0 ||
-        throw(ArgumentError("print_frequency must be positive, got $print_frequency"))
-    store_frequency > 0 ||
-        throw(ArgumentError("store_frequency must be positive, got $store_frequency"))
+function validate_trace_frequency(name::Symbol, value)
+    value isa Integer && !(value isa Bool) ||
+        throw(ArgumentError("$(name) must be an integer, got $(repr(value))"))
+    value > 0 ||
+        throw(ArgumentError("$(name) must be positive, got $value"))
+    return Int(value)
+end
+
+"""
+    SnoptTraceMinimal(; print_frequency=1, store_frequency=1)
+
+Record scalar progress values during a solve.
+
+Both frequencies must be positive integers. `print_frequency` controls printed
+rows. `store_frequency` controls rows retained in [`SnoptTrace`](@ref).
+"""
+function SnoptTraceMinimal(; print_frequency = 1, store_frequency = 1)
+    print_frequency = validate_trace_frequency(:print_frequency, print_frequency)
+    store_frequency = validate_trace_frequency(:store_frequency, store_frequency)
     return SnoptTraceLevel(:minimal, print_frequency, store_frequency)
 end
 
-function SnoptTraceAll(; print_frequency::Int = 1, store_frequency::Int = 1)
-    print_frequency > 0 ||
-        throw(ArgumentError("print_frequency must be positive, got $print_frequency"))
-    store_frequency > 0 ||
-        throw(ArgumentError("store_frequency must be positive, got $store_frequency"))
+"""
+    SnoptTraceAll(; print_frequency=1, store_frequency=1)
+
+Record scalar progress, points, and constraint values during a solve.
+
+Both frequencies must be positive integers. Full traces copy the point and
+constraint arrays for each stored row.
+"""
+function SnoptTraceAll(; print_frequency = 1, store_frequency = 1)
+    print_frequency = validate_trace_frequency(:print_frequency, print_frequency)
+    store_frequency = validate_trace_frequency(:store_frequency, store_frequency)
     return SnoptTraceLevel(:all, print_frequency, store_frequency)
 end
 
 SnoptTraceMinimal(freq::Integer) = SnoptTraceMinimal(;
-    print_frequency = Int(freq), store_frequency = Int(freq))
+    print_frequency = freq, store_frequency = freq)
 SnoptTraceAll(freq::Integer) = SnoptTraceAll(;
-    print_frequency = Int(freq), store_frequency = Int(freq))
+    print_frequency = freq, store_frequency = freq)
 
+"""
+    SnoptTraceEntry
+
+One stored SNOPT iteration.
+
+Unavailable numeric values are `NaN`. The final row may use `nothing` for
+vectors or status data that SNOPT did not provide.
+"""
 struct SnoptTraceEntry
     iteration::Int
     major_iter::Int
@@ -47,6 +75,14 @@ struct SnoptTraceEntry
     status::Union{Nothing, Int}
 end
 
+"""
+    SnoptTrace
+
+Stored iteration records and the trace level that produced them.
+
+Access a solve trace through `solution.trace` after passing
+`store_trace = Val(true)` to `solve`.
+"""
 struct SnoptTrace
     history::Vector{SnoptTraceEntry}
     trace_level::SnoptTraceLevel

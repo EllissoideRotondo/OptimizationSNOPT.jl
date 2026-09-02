@@ -37,63 +37,58 @@ const SNOPT_GLOBAL_LOCK = ReentrantLock()
 """
     SnoptOptimizer(; kwargs...)
 
-Optimizer using SNOPT (Sparse Nonlinear OPTimizer) for nonlinear optimization.
+Configure SNOPT for an Optimization.jl problem.
 
 SNOPT solves problems of the form:
 
-    min  f(x)
-    s.t. g_L ≤ g(x) ≤ g_U
-         x_L ≤  x   ≤ x_U
+```text
+minimize    f(x)
+subject to  g_L <= g(x) <= g_U
+            x_L <= x <= x_U
+```
 
-# Common Interface Arguments
+# Optimizer keywords
 
-The following common optimization arguments can be passed to `solve`:
-- `maxiters`: Overrides the `major_iterations_limit` option
-- `abstol`: Overrides the `major_optimality_tolerance` option
-- `reltol`: Overrides the `minor_feasibility_tolerance` option
-- `verbose`: When `true` or `Val(true)`, prints an OptimizationSNOPT trace
-- `show_trace`: Alias for `verbose`, following the SciML diagnostics API
-- `trace_level`: `SnoptTraceMinimal()` or `SnoptTraceAll()`; supports print/store frequency
-- `store_trace`: When `Val(true)`, stores the trace in `sol.original.trace`
+Iteration limits must be positive integers. Print levels must be nonnegative
+integers. All tolerances must be positive, finite real numbers.
 
-# Keyword Arguments
+- `major_print_level::Int = 1`: SNOPT's major-iteration output level.
+- `minor_print_level::Int = 0`: SNOPT's minor-iteration output level.
+- `major_iterations_limit::Int = 1000`: Maximum major iterations.
+- `minor_iterations_limit::Int = 500`: Maximum minor iterations.
+- `major_optimality_tolerance::Float64 = 1e-6`: First-order optimality tolerance.
+- `major_feasibility_tolerance::Float64 = 1e-6`: Nonlinear feasibility tolerance.
+- `minor_feasibility_tolerance::Float64 = 1e-6`: Linear subproblem feasibility tolerance.
+- `derivative_option::Int = 1`: SNOPT derivative mode. Valid values are 1, 2, and 3.
+- `hessian::String = "full_memory"`: Use `"full_memory"` or `"limited_memory"`.
+- `additional_options::AbstractDict`: Other SNOPT options.
 
-## Output Options
-- `major_print_level::Int = 1`: Print level for major iterations (0 = silent, 1 = summary)
-- `minor_print_level::Int = 0`: Print level for minor iterations
+Additional option keys may be strings or symbols. Symbol underscores become
+spaces. Values may be integers, floats, strings, symbols, or `nothing`.
 
-## Iteration Limits
-- `major_iterations_limit::Int = 1000`: Maximum number of major iterations
-- `minor_iterations_limit::Int = 500`: Maximum number of minor iterations
+The constructor rejects additional options that duplicate explicit keywords.
+It also normalizes all option keys and values.
 
-## Tolerances
-- `major_optimality_tolerance::Float64 = 1e-6`: KKT optimality tolerance
-- `major_feasibility_tolerance::Float64 = 1e-6`: Nonlinear constraint feasibility tolerance
-- `minor_feasibility_tolerance::Float64 = 1e-6`: Linear feasibility tolerance for QP subproblems
+# Solve keywords
 
-## Derivative Options
-- `derivative_option::Int = 1`: Derivative mode (1 = gradient only, 3 = gradient + Jacobian)
+These common Optimization.jl keywords override related optimizer fields:
 
-## Additional Options
-- `additional_options::AbstractDict`: Any other SNOPT option not explicitly listed above,
-  using strings or symbols as keys (spaces or underscores allowed, case-insensitive). Values
-  may be integers, floats, strings/symbols for option words, or `nothing` for bare options.
-  Keys and values are validated by SNOPT at construction time when `libsnopt7` is available.
-  Keys that duplicate an explicitly listed option above (e.g. `major_optimality_tolerance`)
-  are disallowed and raise an `ArgumentError` at construction time.
+- `maxiters` overrides `major_iterations_limit`.
+- `abstol` overrides `major_optimality_tolerance`.
+- `reltol` overrides `minor_feasibility_tolerance`.
+- `verbose` or `show_trace` prints an iteration trace.
+- `trace_level` selects [`SnoptTraceMinimal`](@ref) or [`SnoptTraceAll`](@ref).
+- `store_trace = Val(true)` stores records in `solution.trace`.
 
-# Notes
+# Side effects and concurrency
 
-  * **Concurrency.** SNOPT keeps global Fortran state (one active workspace per
-    process). Concurrent `solve` calls are serialized by an internal lock, so
-    threaded callers are safe but never run SNOPT in parallel; use multiple
-    Julia processes for parallel solves.
-  * **Construction side effect.** When `libsnopt7` is available, the
-    constructor validates all options against the library using a temporary
-    SNOPT workspace. By SNOPT's single-active-workspace rule this closes any
-    manually managed `SNOPT.initialize` workspace currently open in the
-    process, so construct optimizers before setting up low-level SNOPT.jl
-    problems.
+SNOPT owns one active Fortran workspace per process. This package serializes
+workspace creation and solves. Threaded callers are safe, but solves run
+sequentially.
+
+When SNOPT is available, construction validates options with a temporary
+workspace. This closes any manually managed SNOPT.jl workspace. Construct the
+optimizer before creating a low-level workspace.
 
 # Examples
 
@@ -103,18 +98,16 @@ using OptimizationBase, OptimizationSNOPT
 opt = SnoptOptimizer()
 
 opt = SnoptOptimizer(
-    major_iterations_limit = 2000,
-    major_optimality_tolerance = 1e-8,
-    additional_options = Dict("Linesearch tolerance" => 0.9)
+    major_iterations_limit = 2_000,
+    major_optimality_tolerance = 1.0e-8,
+    additional_options = Dict("Linesearch tolerance" => 0.9),
 )
 
-result = solve(prob, opt; maxiters = 500, abstol = 1e-8, verbose = Val(true))
+result = solve(prob, opt; maxiters = 500, abstol = 1.0e-8, verbose = true)
 ```
 
-# References
-
-For complete documentation of all SNOPT options, see:
-https://ccom.ucsd.edu/~optimizers/docs/snopt/options.html
+See the [SNOPT option reference](https://ccom.ucsd.edu/~optimizers/docs/snopt/options.html)
+for every native option.
 """
 @kwdef struct SnoptOptimizer <: SciMLBase.AbstractOptimizationAlgorithm
     # Output

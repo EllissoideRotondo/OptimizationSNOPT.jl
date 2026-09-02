@@ -1,0 +1,40 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+    tags: ['*']
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+      statuses: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: OptimizationSNOPT
+      - uses: actions/checkout@v4
+        with:
+          repository: EllissoideRotondo/SNOPT.jl
+          path: SNOPT
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v2
+      - name: Install documentation dependencies
+        run: >-
+          julia --project=OptimizationSNOPT/docs -e
+          'using Pkg; Pkg.develop(path="SNOPT");
+          Pkg.develop(path="OptimizationSNOPT"); Pkg.instantiate()'
+      - name: Build and deploy
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: julia --project=OptimizationSNOPT/docs OptimizationSNOPT/docs/make.jl
