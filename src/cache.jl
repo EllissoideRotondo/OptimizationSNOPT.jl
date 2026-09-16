@@ -89,7 +89,7 @@ function Base.getproperty(
         end
         return nothing
     end
-    return getfield(sol, name)
+    return invoke(Base.getproperty, Tuple{SciMLBase.AbstractOptimizationSolution, Symbol}, sol, name)
 end
 
 function SnoptCache(
@@ -218,4 +218,3 @@ function eval_constraint_jacobian(cache::SnoptCache, j, x)
     end
     return
 end
-

@@ -90,6 +90,7 @@ end
 end
 
 include("trace_contracts.jl")
+include("adapter_contracts.jl")
 
 @testset "Adapter logging and workspace sizing" begin
     @test OptimizationSNOPT.snopt_show_trace(true)
@@ -327,7 +328,7 @@ end
     @test opt_setup.bl[end] == -OptimizationSNOPT.SNOPT_BOUND_INF
     @test opt_setup.bu[end] == OptimizationSNOPT.SNOPT_BOUND_INF
     @test logger isa OptimizationSNOPT.SnoptProgressLogger
-    finalize(opt_setup.ws)
+    close(opt_setup.ws)
     sol = solve!(cache)
     @test SciMLBase.successful_retcode(sol)
     @test sol.u ≈ [1.0, 1.0] atol = 1.0e-4

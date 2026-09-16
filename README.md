@@ -33,7 +33,7 @@ For a source checkout, place both repositories in the same directory:
 ```bash
 git clone https://github.com/EllissoideRotondo/SNOPT.jl SNOPT
 git clone https://github.com/EllissoideRotondo/OptimizationSNOPT.jl OptimizationSNOPT
-julia --project=OptimizationSNOPT -e 'using Pkg; Pkg.instantiate()'
+julia --project=OptimizationSNOPT -e 'using Pkg; Pkg.develop(path="SNOPT"); Pkg.instantiate()'
 ```
 
 Set `SNOPTDIR` to the directory that contains the shared library:
@@ -81,7 +81,7 @@ solution.retcode
 Run the constrained worked example from the repository root:
 
 ```bash
-julia --project=examples examples/hs71.jl
+julia --project=. examples/hs71.jl
 ```
 
 ## Solver configuration

@@ -21,7 +21,7 @@ For source development, clone both repositories into one directory:
 ```bash
 git clone https://github.com/EllissoideRotondo/SNOPT.jl SNOPT
 git clone https://github.com/EllissoideRotondo/OptimizationSNOPT.jl OptimizationSNOPT
-julia --project=OptimizationSNOPT -e 'using Pkg; Pkg.instantiate()'
+julia --project=OptimizationSNOPT -e 'using Pkg; Pkg.develop(path="SNOPT"); Pkg.instantiate()'
 ```
 
 ## Configure the library

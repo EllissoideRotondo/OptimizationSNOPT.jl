@@ -66,5 +66,5 @@ The repository example compares three derivative methods on a standard
 constrained problem.
 
 ```bash
-julia --project=examples examples/hs71.jl
+julia --project=. examples/hs71.jl
 ```

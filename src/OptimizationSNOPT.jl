@@ -10,10 +10,8 @@ using SciMLBase
 using SciMLLogging
 using ADTypes
 using SymbolicIndexingInterface
-# Load the common AD backends (and the sparse-AD stack) so ADTypes selectors
-# like AutoForwardDiff(), AutoFiniteDiff(), and AutoSparse(...) work without
-# the user importing the backend packages themselves — the backends only
-# activate DifferentiationInterface's extensions once they are loaded.
+# Loading these backends activates DifferentiationInterface extensions for the
+# corresponding ADTypes selectors.
 import DifferentiationInterface
 import FiniteDiff
 import ForwardDiff
@@ -26,13 +24,9 @@ export SnoptTraceAll
 export SnoptTraceEntry
 export SnoptTraceMinimal
 
-# SNOPT keeps global Fortran state: there is exactly one active workspace per
-# process, and creating a new one finalizes the previous one. This lock
-# serializes every code path that creates or drives a SNOPT workspace so that
-# concurrent `solve` calls from different tasks/threads cannot corrupt each
-# other mid-solve. Solves are therefore serialized, never parallel; use
-# multiple Julia processes for parallel SNOPT solves.
-const SNOPT_GLOBAL_LOCK = ReentrantLock()
+# Share SNOPT's process lock because Fortran permits one active workspace.
+# Solves run sequentially; use separate processes for parallel solves.
+const SNOPT_GLOBAL_LOCK = SNOPT.SNOPT_LOCK
 
 """
     SnoptOptimizer(; kwargs...)
@@ -126,10 +120,8 @@ for every native option.
     # Derivative handling
     derivative_option::Int = 1
 
-    # Hessian approximation: "full_memory" or "limited_memory"
     hessian::String = "full_memory"
 
-    # Catch-all for any other SNOPT option string
     additional_options::Dict{String, Any} = Dict{String, Any}()
 
     function SnoptOptimizer(
@@ -245,10 +237,10 @@ function normalize_snopt_option_key(key)
     key isa Union{AbstractString, Symbol} ||
         throw(ArgumentError("SNOPT option keys must be strings or symbols, got $(repr(key))"))
     normalized = replace(String(key), '_' => ' ')
-    normalized = strip(normalized)
+    normalized = join(split(normalized), " ")
     isempty(normalized) &&
         throw(ArgumentError("SNOPT option keys must not be empty"))
-    return uppercasefirst(normalized)
+    return uppercasefirst(lowercase(normalized))
 end
 
 function normalize_snopt_option_value(key::String, value)
@@ -415,7 +407,7 @@ function validate_snopt_option_pairs_with_library!(options)
                 end
             end
         finally
-            finalize(ws)
+            close(ws)
         end
     end
     return nothing
@@ -496,7 +488,7 @@ function snopt_workspace_lengths(
         end
         error("SNOPT memory estimator failed with info code $(memory.info)")
     finally
-        finalize(mem_ws)
+        close(mem_ws)
     end
 end
 
@@ -546,7 +538,6 @@ function map_optimizer_args(
             Int32.(cache.J.colptr), Int32.(cache.J.rowval),
             zeros(Float64, nnz(cache.J)))
     else
-        # Dense Jacobian: all nc×n entries are nonzero
         rowval = repeat(Int32.(1:nc), n)
         colptr = Int32.(range(1; step = nc, length = n + 1))
         SparseMatrixCSC(nc, n, colptr, rowval, zeros(Float64, nc * n))
@@ -600,7 +591,7 @@ function map_optimizer_args(
         # Do not leave a half-configured workspace alive until the GC runs
         # (e.g. when SNOPT rejects an option that was valid at construction
         # time but not for this solve, such as "Time limit" on older builds).
-        finalize(ws)
+        close(ws)
         rethrow()
     end
 end
@@ -700,7 +691,7 @@ function run_snopt_attempt(
             snoptb!(opt_setup)
         end
     catch
-        finalize(opt_setup.ws)
+        close(opt_setup.ws)
         rethrow()
     end
 
@@ -731,7 +722,7 @@ function SciMLBase.__solve(cache::SnoptCache)
     opt_setup, logger, minimizer, lambda = lock(SNOPT_GLOBAL_LOCK) do
         opt_setup, logger = run_snopt_attempt(cache, maxiters, maxtime, abstol, reltol)
         if snopt_returned_without_evaluating(opt_setup)
-            finalize(opt_setup.ws)
+            close(opt_setup.ws)
             @warn "SNOPT returned inform=0 without evaluating the problem; retrying once with a fresh workspace"
             opt_setup, logger = run_snopt_attempt(cache, maxiters, maxtime, abstol, reltol)
         end
@@ -744,7 +735,7 @@ function SciMLBase.__solve(cache::SnoptCache)
         # Call f_snend immediately rather than relying on the GC finalizer.
         # SNOPT7 has global Fortran state; without this, a second solve in the
         # same process sees stale state and returns instantly with inform=0.
-        finalize(opt_setup.ws)
+        close(opt_setup.ws)
         opt_setup, logger, minimizer, lambda
     end
 
@@ -798,7 +789,6 @@ function SciMLBase.__init(
         verbose = OptimizationBase.DEFAULT_VERBOSE,
         kwargs...
     )
-    # show_trace is SciMLBase's conventional alias for verbose
     final_verbose = isnothing(show_trace) ? verbose : show_trace
     return SnoptCache(prob, opt; maxiters, maxtime, abstol, reltol, progress,
                       verbose = final_verbose, trace_level, store_trace, kwargs...)

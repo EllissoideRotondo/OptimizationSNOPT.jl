@@ -9,7 +9,7 @@
 #   1 ≤ xᵢ ≤ 5
 #
 # Run from the OptimizationSNOPT.jl repository root:
-#   julia --project=examples examples/hs71.jl
+#   julia --project=. examples/hs71.jl
 
 using ADTypes: AutoFiniteDiff, AutoForwardDiff
 using OptimizationSNOPT
