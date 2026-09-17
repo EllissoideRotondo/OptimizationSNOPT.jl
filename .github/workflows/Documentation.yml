@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
     tags: ['*']
-  pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -12,12 +11,21 @@ concurrency:
 
 jobs:
   docs:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, deimos, snopt]
+    env:
+      SNOPTDIR: /usr/lib
+      GIT_EXEC_PATH: /home/alex/.local/runner-git/usr/libexec/git-core
+    defaults:
+      run:
+        working-directory: OptimizationSNOPT
     permissions:
       contents: write
       pull-requests: read
       statuses: write
     steps:
+      - name: Add user git
+        working-directory: ${{ github.workspace }}
+        run: echo "/home/alex/.local/runner-git/usr/bin" >> "$GITHUB_PATH"
       - uses: actions/checkout@v4
         with:
           path: OptimizationSNOPT
@@ -31,10 +39,10 @@ jobs:
       - uses: julia-actions/cache@v2
       - name: Install documentation dependencies
         run: >-
-          julia --project=OptimizationSNOPT/docs -e
-          'using Pkg; Pkg.develop(path="SNOPT");
-          Pkg.develop(path="OptimizationSNOPT"); Pkg.instantiate()'
+          julia --project=docs -e
+          'using Pkg; Pkg.develop(path="../SNOPT");
+          Pkg.develop(path="."); Pkg.instantiate()'
       - name: Build and deploy
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: julia --project=OptimizationSNOPT/docs OptimizationSNOPT/docs/make.jl
+        run: julia --project=docs docs/make.jl
