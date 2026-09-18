@@ -21,14 +21,7 @@ You must obtain the SNOPT library and license separately.
 
 ## Installation
 
-Install OptimizationSNOPT.jl with Julia's package manager:
-
-```julia
-import Pkg
-Pkg.add("OptimizationSNOPT")
-```
-
-For a source checkout, place both repositories in the same directory:
+Clone both repositories into the same directory:
 
 ```bash
 git clone https://github.com/EllissoideRotondo/SNOPT.jl SNOPT

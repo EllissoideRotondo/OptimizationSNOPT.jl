@@ -8,16 +8,9 @@ includes the C API provided by
 
 You must obtain the SNOPT library and license separately.
 
-## Add the package
+## Install from source
 
-Install OptimizationSNOPT.jl with Julia's package manager:
-
-```julia
-import Pkg
-Pkg.add("OptimizationSNOPT")
-```
-
-For source development, clone both repositories into one directory:
+Clone both repositories into one directory:
 
 ```bash
 git clone https://github.com/EllissoideRotondo/SNOPT.jl SNOPT

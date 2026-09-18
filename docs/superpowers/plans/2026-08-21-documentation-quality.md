@@ -83,7 +83,7 @@ git -C ../SNOPT commit -m "docs: store writing and quality standards"
 
 - [ ] **Step 1: Write the task-oriented README**
 
-Lead with package selection and licensing. Show `Pkg.add("OptimizationSNOPT")`,
+Lead with package selection and licensing. Show the source checkout workflow,
 `SNOPT.has_snopt()`, one unconstrained solve, the full example command, and test
 commands. Link to SNOPT.jl for low-level use.
 
