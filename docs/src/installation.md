@@ -10,7 +10,7 @@ You must obtain the SNOPT library and license separately.
 
 ## Add the package
 
-For a registry installation:
+Install OptimizationSNOPT.jl with Julia's package manager:
 
 ```julia
 import Pkg
