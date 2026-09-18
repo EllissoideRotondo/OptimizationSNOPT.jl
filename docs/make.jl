@@ -6,7 +6,7 @@ makedocs(
     modules = [OptimizationSNOPT],
     checkdocs = :exports,
     format = Documenter.HTML(
-        canonical = "https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/stable/",
+        canonical = "https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/",
         prettyurls = get(ENV, "CI", "false") == "true",
     ),
     pages = [

@@ -1,7 +1,7 @@
 # OptimizationSNOPT.jl
 
 [![CI](https://github.com/EllissoideRotondo/OptimizationSNOPT.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/EllissoideRotondo/OptimizationSNOPT.jl/actions/workflows/CI.yml)
-[![docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/stable/)
+[![docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/)
 
 OptimizationSNOPT.jl connects [Optimization.jl](https://github.com/SciML/Optimization.jl)
 problems to [SNOPT](https://ccom.ucsd.edu/~optimizers/solvers/snopt/).
@@ -14,10 +14,10 @@ problems and automatic differentiation.
 ## Requirements
 
 - Julia 1.10 or later.
-- A licensed SNOPT 7 shared library.
-- SNOPT's `snopt-interface` C functions in that library.
+- A licensed SNOPT 7 shared library that includes the C API provided by
+  [`snopt-interface`](https://github.com/snopt/snopt-interface).
 
-The Julia packages do not include SNOPT or a SNOPT license.
+You must obtain the SNOPT library and license separately.
 
 ## Installation
 
@@ -54,7 +54,7 @@ From the OptimizationSNOPT.jl repository, verify library discovery:
 julia --project=. -e 'using SNOPT; @assert SNOPT.has_snopt(); println("SNOPT is ready")'
 ```
 
-The [SNOPT.jl installation guide](https://EllissoideRotondo.github.io/SNOPT.jl/stable/installation/)
+The [SNOPT.jl installation guide](https://EllissoideRotondo.github.io/SNOPT.jl/dev/installation/)
 lists library names, search paths, licensing, and platform limits.
 
 ## Getting started
@@ -101,7 +101,7 @@ solution = solve(problem, optimizer; maxiters = 500, verbose = true)
 
 OptimizationSNOPT supports bounds, nonlinear constraints, maximization, callbacks,
 cached solves, and iteration traces. See the
-[`SnoptOptimizer` API](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/stable/api/)
+[`SnoptOptimizer` API](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/api/)
 for accepted fields and common solve keywords.
 
 ## Concurrency
