@@ -2,21 +2,15 @@
 
 ## Requirements
 
-Install Julia 1.10 or later. Obtain a licensed SNOPT 7 shared library.
-The library must include SNOPT's `snopt-interface` C functions.
+Install Julia 1.10 or later. Obtain a licensed SNOPT 7 shared library that
+includes the C API provided by
+[snopt-interface](https://github.com/snopt/snopt-interface).
 
-The package does not include SNOPT or a SNOPT license.
+You must obtain the SNOPT library and license separately.
 
-## Add the package
+## Install from source
 
-For a registry installation:
-
-```julia
-import Pkg
-Pkg.add("OptimizationSNOPT")
-```
-
-For source development, clone both repositories into one directory:
+Clone both repositories into one directory:
 
 ```bash
 git clone https://github.com/EllissoideRotondo/SNOPT.jl SNOPT
@@ -52,7 +46,7 @@ julia --project=. -e 'using SNOPT; @assert SNOPT.has_snopt(); println("SNOPT is 
 ```
 
 `SNOPT.has_snopt()` returns `true` when Julia finds a compatible library.
-The [SNOPT.jl installation guide](https://EllissoideRotondo.github.io/SNOPT.jl/stable/installation/)
+The [SNOPT.jl installation guide](https://EllissoideRotondo.github.io/SNOPT.jl/dev/installation/)
 lists filenames, fallback search paths, and platform limits.
 
 ## Test the package

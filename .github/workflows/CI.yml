@@ -12,18 +12,18 @@ concurrency:
 
 jobs:
   test:
-    # GitHub-hosted runners have no SNOPT license/library, so the test suite
-    # skips every solver assertion: this job only checks that the package loads
-    # and that the library-free paths behave. The full suite runs locally
-    # (Linux + Windows VM) against a licensed libsnopt7.
-    name: Julia ${{ matrix.version }} - ${{ matrix.os }} (no solver lib)
-    runs-on: ${{ matrix.os }}
+    name: Julia ${{ matrix.version }} / OptimizationSNOPT
+    runs-on: [self-hosted, linux, x64, deimos, snopt]
+    env:
+      SNOPTDIR: /usr/lib
+      GIT_EXEC_PATH: /home/alex/.local/runner-git/usr/libexec/git-core
     strategy:
       fail-fast: false
       matrix:
         version: ['1.10', '1']
-        os: [ubuntu-latest, windows-latest]
     steps:
+      - name: Add user git
+        run: echo "/home/alex/.local/runner-git/usr/bin" >> "$GITHUB_PATH"
       # Develop the sibling explicitly because Julia 1.10 ignores [sources].
       - uses: actions/checkout@v4
         with:

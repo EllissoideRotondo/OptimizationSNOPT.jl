@@ -4,7 +4,7 @@ OptimizationSNOPT.jl solves Optimization.jl problems with SNOPT.
 SNOPT is a commercial solver for large, constrained nonlinear problems.
 
 This package provides the Optimization.jl interface. The sibling
-[SNOPT.jl](https://EllissoideRotondo.github.io/SNOPT.jl/stable/) package provides
+[SNOPT.jl](https://EllissoideRotondo.github.io/SNOPT.jl/dev/) package provides
 direct access to SNOPT's native interfaces.
 
 ## Interfaces
