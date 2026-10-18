@@ -76,6 +76,9 @@ end
     # Unbounded (SNOPT inform 21/22) must map to an existing ReturnCode.
     @test OptimizationSNOPT.map_retcode(21) == SciMLBase.ReturnCode.Failure
     @test OptimizationSNOPT.map_retcode(22) == SciMLBase.ReturnCode.Failure
+    # 5 and 6 are elastic-mode results, in which the constraints may be violated.
+    @test OptimizationSNOPT.map_retcode(5) == SciMLBase.ReturnCode.Infeasible
+    @test OptimizationSNOPT.map_retcode(6) == SciMLBase.ReturnCode.Infeasible
     @test OptimizationSNOPT.snopt_bound_value(Inf) == OptimizationSNOPT.SNOPT_BOUND_INF
     @test OptimizationSNOPT.snopt_bound_value(-Inf) == -OptimizationSNOPT.SNOPT_BOUND_INF
     @test OptimizationSNOPT.snopt_returned_without_evaluating(
@@ -395,6 +398,7 @@ end
     @test sol_trace.trace isa OptimizationSNOPT.SnoptTrace
     @test sol_trace.original.trace === sol_trace.trace
     @test sol_trace.trace.history[end].iteration == -1
+    @test sol_trace.trace.history[end].status === OptimizationSNOPT.SNOPT.SnoptStatus.Optimal
 
     sol4 = solve(prob, SnoptOptimizer(); verbose = Val(true))
     @test sol4 isa SciMLBase.OptimizationSolution

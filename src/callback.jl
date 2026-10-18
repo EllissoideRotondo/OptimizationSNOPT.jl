@@ -79,7 +79,7 @@ A value that is not available is `NaN`, or `nothing` for the vectors and the sta
   - `bound_violation`: largest violation of a variable bound.
   - `x`: copy of the point, with [`SnoptTraceAll`](@ref) only.
   - `c`: copy of the constraint values, with [`SnoptTraceAll`](@ref) only.
-  - `status`: SNOPT status code, in the final row only.
+  - `status`: outcome of the solve, a `SNOPT.SnoptStatus` value, in the final row only.
 """
 struct SnoptTraceEntry
     iteration::Int
@@ -92,7 +92,7 @@ struct SnoptTraceEntry
     bound_violation::Float64
     x::Union{Nothing, Vector{Float64}}
     c::Union{Nothing, Vector{Float64}}
-    status::Union{Nothing, Int}
+    status::Union{Nothing, SNOPT.SnoptStatus.T}
 end
 
 """
@@ -571,7 +571,7 @@ function finish_trace!(
         cb.has_last_x[] ? bounds_violation(cb.last_x, cb.lb, cb.ub) : NaN,
         nothing,
         nothing,
-        status
+        SNOPT.status_from_code(status)
     )
     emit_trace_entry!(cb, final_entry)
     cb.final_trace_printed[] = true

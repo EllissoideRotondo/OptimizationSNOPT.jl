@@ -618,9 +618,10 @@ function check_and_convert_tolerance(name::Symbol, tolerance)
 end
 
 function map_retcode(inform::Int)
-    if inform in (1, 2, 3, 4, 5, 6)
+    if inform in (1, 2, 3)
         return SciMLBase.ReturnCode.Success
-    elseif inform in (11, 12, 13, 14, 15, 16)
+    elseif inform in (5, 6, 11, 12, 13, 14, 15, 16)
+        # 5 and 6 are elastic-mode results, in which the constraints may be violated.
         return SciMLBase.ReturnCode.Infeasible
     elseif inform in (21, 22)
         # Unbounded objective. SciMLBase has no dedicated "unbounded" code, so

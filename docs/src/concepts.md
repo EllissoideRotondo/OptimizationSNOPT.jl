@@ -21,8 +21,8 @@ same way for every Optimization.jl solver:
 | SNOPT status code | `sol.retcode` | Meaning |
 | --- | --- | --- |
 | 1 | `ReturnCode.Success` | Optimal solution found. |
-| 2–6 | `ReturnCode.Success` | Partial success: a feasible point only (2), less than the requested accuracy (3), or a result of SNOPT's elastic mode (5–6). Check `sol.original.inform`. |
-| 11–16 | `ReturnCode.Infeasible` | The constraints cannot be satisfied. |
+| 2–3 | `ReturnCode.Success` | Partial success: a feasible point only (2), or less than the requested accuracy (3). Check `sol.original.inform`. |
+| 5–6, 11–16 | `ReturnCode.Infeasible` | The constraints cannot be satisfied. Codes 5 and 6 come from SNOPT's elastic mode, in which the constraints may be violated. |
 | 21–22 | `ReturnCode.Failure` | The objective decreases without limit. |
 | 31–32 | `ReturnCode.MaxIters` | An iteration limit was reached. |
 | 34 | `ReturnCode.MaxTime` | The CPU time limit (`maxtime`) was reached. |

@@ -56,7 +56,7 @@ sol = solve(prob, SnoptOptimizer();
 
 With these settings, the solve prints every tenth major iteration and stores every
 major iteration. The last row of a trace has `iteration == -1` and holds the final
-values and the SNOPT status code. Without `store_trace`, `sol.trace` is `nothing`.
+values and the status, a `SNOPT.SnoptStatus` value. Without `store_trace`, `sol.trace` is `nothing`.
 
 ## Stop on a custom condition
 
