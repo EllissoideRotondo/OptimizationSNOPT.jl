@@ -29,79 +29,58 @@ export SnoptTraceMinimal
 const SNOPT_GLOBAL_LOCK = SNOPT.SNOPT_LOCK
 
 """
-    SnoptOptimizer(; kwargs...)
+    SnoptOptimizer(; major_iterations_limit = 1000, minor_iterations_limit = 500,
+                   major_optimality_tolerance = 1.0e-6,
+                   major_feasibility_tolerance = 1.0e-6,
+                   minor_feasibility_tolerance = 1.0e-6,
+                   hessian = "full_memory", derivative_option = 1,
+                   major_print_level = 1, minor_print_level = 0,
+                   additional_options = Dict{String, Any}())
 
-Configure SNOPT for an Optimization.jl problem.
+Optimization.jl algorithm that solves an `OptimizationProblem` with SNOPT.
 
-SNOPT solves problems of the form:
+Pass it to `solve` or `init`. The problem needs the objective gradient and, if it has
+constraints, the constraint Jacobian, from an automatic differentiation backend or
+from the `grad` and `cons_j` keywords of `OptimizationFunction`. See
+[Getting started](@ref) for a tutorial and [Set solver options](@ref) for the options.
 
-```text
-minimize    f(x)
-subject to  g_L <= g(x) <= g_U
-            x_L <= x <= x_U
-```
+# Keywords
 
-# Optimizer keywords
+  - `major_iterations_limit`, `minor_iterations_limit`: iteration limits, positive
+    integers.
+  - `major_optimality_tolerance`: tolerance on the optimality conditions.
+  - `major_feasibility_tolerance`: tolerance on the nonlinear constraint violation.
+  - `minor_feasibility_tolerance`: tolerance on the constraint violation in each
+    subproblem.
+  - `hessian`: `"full_memory"` or `"limited_memory"`; use `"limited_memory"` for many
+    variables.
+  - `derivative_option`: SNOPT `Derivative option`, `1`, `2` or `3`; keep the default.
+  - `major_print_level`, `minor_print_level`: SNOPT print levels, nonnegative
+    integers. SNOPT's print file is not written, so they have no visible effect.
+  - `additional_options`: other SNOPT options, as a dictionary from option name
+    (`String` or `Symbol`) to value (integer, finite float, `String`, `Symbol`, or
+    `nothing` for an option without a value). In names and in `String` and `Symbol`
+    values, `_` stands for a space.
 
-Iteration limits must be positive integers. Print levels must be nonnegative
-integers. All tolerances must be positive, finite real numbers.
+All tolerances must be positive and finite. The `solve` keywords `maxiters`,
+`maxtime`, `abstol` and `reltol` set the SNOPT options `Major iterations limit`,
+`Time limit` (CPU seconds), `Major optimality tolerance` and
+`Minor feasibility tolerance`, and take precedence over the fields.
 
-- `major_print_level::Int = 1`: SNOPT's major-iteration output level.
-- `minor_print_level::Int = 0`: SNOPT's minor-iteration output level.
-- `major_iterations_limit::Int = 1000`: Maximum major iterations.
-- `minor_iterations_limit::Int = 500`: Maximum minor iterations.
-- `major_optimality_tolerance::Float64 = 1e-6`: First-order optimality tolerance.
-- `major_feasibility_tolerance::Float64 = 1e-6`: Nonlinear feasibility tolerance.
-- `minor_feasibility_tolerance::Float64 = 1e-6`: Linear subproblem feasibility tolerance.
-- `derivative_option::Int = 1`: SNOPT derivative mode. Valid values are 1, 2, and 3.
-- `hessian::String = "full_memory"`: Use `"full_memory"` or `"limited_memory"`.
-- `additional_options::AbstractDict`: Other SNOPT options.
-
-Additional option keys may be strings or symbols. Symbol underscores become
-spaces. Values may be integers, floats, strings, symbols, or `nothing`.
-
-The constructor rejects additional options that duplicate explicit keywords.
-It also normalizes all option keys and values.
-
-# Solve keywords
-
-These common Optimization.jl keywords override related optimizer fields:
-
-- `maxiters` overrides `major_iterations_limit`.
-- `abstol` overrides `major_optimality_tolerance`.
-- `reltol` overrides `minor_feasibility_tolerance`.
-- `verbose` or `show_trace` prints an iteration trace.
-- `trace_level` selects [`SnoptTraceMinimal`](@ref) or [`SnoptTraceAll`](@ref).
-- `store_trace = Val(true)` stores records in `solution.trace`.
-
-# Side effects and concurrency
-
-SNOPT owns one active Fortran workspace per process. This package serializes
-workspace creation and solves. Threaded callers are safe, but solves run
-sequentially.
-
-When SNOPT is available, construction validates options with a temporary
-workspace. This closes any manually managed SNOPT.jl workspace. Construct the
-optimizer before creating a low-level workspace.
+Throws an `ArgumentError` for a value of the wrong type or range, for a `Bool` option
+value, for an option in `additional_options` that has its own keyword, or for a
+duplicate option name. If the SNOPT library is available, the constructor also checks
+every option with SNOPT in a temporary workspace; this closes any open SNOPT.jl
+workspace in the same process.
 
 # Examples
 
 ```julia
-using OptimizationBase, OptimizationSNOPT
-
-opt = SnoptOptimizer()
-
-opt = SnoptOptimizer(
-    major_iterations_limit = 2_000,
-    major_optimality_tolerance = 1.0e-8,
-    additional_options = Dict("Linesearch tolerance" => 0.9),
-)
-
-result = solve(prob, opt; maxiters = 500, abstol = 1.0e-8, verbose = true)
+opt = SnoptOptimizer(major_optimality_tolerance = 1.0e-8,
+                     hessian = "limited_memory",
+                     additional_options = Dict("Linesearch tolerance" => 0.9))
+sol = solve(prob, opt; maxiters = 500)
 ```
-
-See the [SNOPT option reference](https://ccom.ucsd.edu/~optimizers/docs/snopt/options.html)
-for every native option.
 """
 @kwdef struct SnoptOptimizer <: SciMLBase.AbstractOptimizationAlgorithm
     # Output

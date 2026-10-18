@@ -1,60 +1,62 @@
+```@meta
+CurrentModule = OptimizationSNOPT
+```
+
 # Installation
+
+OptimizationSNOPT.jl needs two parts: the Julia package, installed with the package
+manager, and the SNOPT shared library, available from the SNOPT distributors. The
+library setup is the same as for SNOPT.jl, which OptimizationSNOPT.jl uses to call
+SNOPT.
 
 ## Requirements
 
-Install Julia 1.10 or later. Obtain a licensed SNOPT 7 shared library that
-includes the C API provided by
-[snopt-interface](https://github.com/snopt/snopt-interface).
+- Julia 1.11 or later.
+- A licensed SNOPT 7.7 shared library, `libsnopt7`, that includes the C interface
+  from [snopt-interface](https://github.com/snopt/snopt-interface).
 
-You must obtain the SNOPT library and license separately.
+## Install the package
 
-## Install from source
-
-Clone both repositories into one directory:
-
-```bash
-git clone https://github.com/EllissoideRotondo/SNOPT.jl SNOPT
-git clone https://github.com/EllissoideRotondo/OptimizationSNOPT.jl OptimizationSNOPT
-julia --project=OptimizationSNOPT -e 'using Pkg; Pkg.develop(path="SNOPT"); Pkg.instantiate()'
+```julia
+using Pkg
+Pkg.add("OptimizationSNOPT")
 ```
 
-## Configure the library
+This also installs SNOPT.jl as a dependency.
 
-Set `SNOPTDIR` to the directory containing `libsnopt7`.
+## Make the library available
 
-Linux and macOS:
+Set the environment variable `SNOPTDIR` to the directory that contains `libsnopt7`,
+before starting Julia.
+
+Linux and macOS (bash or zsh):
 
 ```bash
 export SNOPTDIR=/path/to/snopt/lib
 ```
 
-Windows PowerShell:
+Windows (PowerShell):
 
 ```powershell
 $env:SNOPTDIR = "C:\path\to\snopt\lib"
 ```
 
-Some SNOPT distributions also require `SNOPT_LICENSE`. Follow the vendor's
-instructions for your license type.
+## Check the setup
 
-## Verify the setup
-
-From the OptimizationSNOPT.jl repository, verify library discovery:
+This command prints the path of the library that SNOPT.jl found. For a package
+installed in a project environment, add `--project=/path/to/project` after `julia`.
 
 ```bash
-julia --project=. -e 'using SNOPT; @assert SNOPT.has_snopt(); println("SNOPT is ready")'
+julia -e 'using OptimizationSNOPT; S = OptimizationSNOPT.SNOPT; @assert S.has_snopt(); println(S.libsnopt7)'
 ```
 
-`SNOPT.has_snopt()` returns `true` when Julia finds a compatible library.
-The [SNOPT.jl installation guide](https://EllissoideRotondo.github.io/SNOPT.jl/dev/installation/)
-lists filenames, fallback search paths, and platform limits.
+In PowerShell:
 
-## Test the package
-
-Run all tests from the repository root:
-
-```bash
-julia --project=. -e 'using Pkg; Pkg.test()'
+```powershell
+julia -e "using OptimizationSNOPT; S = OptimizationSNOPT.SNOPT; @assert S.has_snopt(); println(S.libsnopt7)"
 ```
 
-The full solver suite runs when the shared library is available.
+If the check fails, the
+[SNOPT.jl installation guide](https://EllissoideRotondo.github.io/SNOPT.jl/dev/installation/)
+gives the library search order, the supported platforms and the troubleshooting
+steps.

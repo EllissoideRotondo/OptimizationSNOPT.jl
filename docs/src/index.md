@@ -1,36 +1,107 @@
-# OptimizationSNOPT.jl
+```@meta
+CurrentModule = OptimizationSNOPT
+```
 
-OptimizationSNOPT.jl solves Optimization.jl problems with SNOPT.
-SNOPT is a commercial solver for large, constrained nonlinear problems.
+# OptimizationSNOPT.jl: SNOPT for Optimization.jl
 
-This package provides the Optimization.jl interface. The sibling
-[SNOPT.jl](https://EllissoideRotondo.github.io/SNOPT.jl/dev/) package provides
-direct access to SNOPT's native interfaces.
+OptimizationSNOPT.jl connects [SNOPT](https://ccom.ucsd.edu/~optimizers/solvers/snopt/),
+a commercial solver for large, sparse, constrained nonlinear optimization problems, to
+[Optimization.jl](https://docs.sciml.ai/Optimization/stable/). A problem defined as an
+`OptimizationProblem` is solved with SNOPT by passing [`SnoptOptimizer`](@ref) to
+`solve`, and the derivatives that SNOPT needs come from any automatic differentiation
+backend that Optimization.jl supports, so the objective and the constraints can stay
+ordinary Julia functions.
 
-## Interfaces
+OptimizationSNOPT.jl solves problems of the form
 
-| Need | Package |
-| --- | --- |
-| Optimization.jl problems and automatic derivatives | OptimizationSNOPT.jl |
-| Direct `snOptA`, `snOptB`, or `snOptC` access | SNOPT.jl |
+```math
+\begin{aligned}
+\min_{x \in \mathbb{R}^n} \quad & f(x, p) \\
+\text{subject to} \quad & l_x \le x \le u_x, \\
+& l_c \le c(x, p) \le u_c,
+\end{aligned}
+```
 
-Both packages require your own licensed SNOPT shared library.
+where ``f`` is the objective, ``c`` is a vector of constraint functions, ``p`` holds
+the parameters, and the bounds can be infinite. SNOPT uses a sequential quadratic
+programming (SQP) method, so ``f`` and ``c`` must be smooth.
 
-## Documentation
+!!! note "SNOPT license required"
+    OptimizationSNOPT.jl does not include SNOPT. A SNOPT license and a compatible
+    `libsnopt7` shared library are available from the SNOPT distributors.
 
-- [Installation](@ref) covers package and SNOPT library setup.
-- [Getting started](@ref) provides unconstrained and constrained examples.
-- [Configuration](@ref) covers options, callbacks, traces, and cached solves.
-- [API reference](@ref api-reference) lists public types and functions.
+## When to use OptimizationSNOPT.jl
 
-## Supported Optimization.jl features
+With OptimizationSNOPT.jl, the same problem can be solved with SNOPT and with the
+other Optimization.jl solvers, and the derivatives come from automatic
+differentiation. The package is built on
+[SNOPT.jl](https://EllissoideRotondo.github.io/SNOPT.jl/dev/), which wraps the three
+SNOPT interfaces `snOptA`, `snOptB` and `snOptC`; use SNOPT.jl directly for linear
+constraints given separately, finite-difference derivatives estimated by SNOPT, or
+warm and hot starts.
 
-- Variable bounds and nonlinear constraints.
-- Minimization and maximization.
-- Automatic or supplied first derivatives.
-- Callbacks and early termination.
-- Cached `init` and `solve!` workflows.
-- Printed and stored iteration traces.
+## Installation
 
-SNOPT solves continuous problems. Integer variables are relaxed to continuous
-variables, and the package emits a warning.
+Install the package with the Julia package manager:
+
+```julia
+using Pkg
+Pkg.add("OptimizationSNOPT")
+```
+
+Then, before starting Julia, set `SNOPTDIR` to the directory of the SNOPT library:
+
+```bash
+export SNOPTDIR=/path/to/snopt/lib
+```
+
+[Installation](installation.md) gives the commands for Windows and the setup check.
+
+## Contents
+
+### Tutorial and installation
+
+The tutorial solves a first problem with bounds and nonlinear constraints. The
+installation page makes the SNOPT library available to Julia.
+
+```@contents
+Pages = [
+    "getting_started.md",
+    "installation.md",
+]
+Depth = 2
+```
+
+### How-to guides
+
+Each guide shows how to do one task with OptimizationSNOPT.jl.
+
+```@contents
+Pages = [
+    "howto/options.md",
+    "howto/monitoring.md",
+    "howto/cache.md",
+]
+Depth = 2
+```
+
+### Solver behaviour and reference
+
+The solver behaviour page explains return codes, SNOPT results and limits. The API
+reference lists every exported type.
+
+```@contents
+Pages = [
+    "concepts.md",
+    "api.md",
+]
+Depth = 2
+```
+
+## Contributing
+
+- Report bugs and request features on the
+  [issue tracker](https://github.com/EllissoideRotondo/OptimizationSNOPT.jl/issues).
+- Before opening a pull request, run the test suite with
+  `julia --project=. -e 'using Pkg; Pkg.test()'` from the repository root.
+  The solver tests run only when Julia finds a licensed `libsnopt7`.

@@ -20,11 +20,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ['1.10', '1']
+        version: ['1.11', '1']
     steps:
       - name: Add user git
         run: echo "/home/alex/.local/runner-git/usr/bin" >> "$GITHUB_PATH"
-      # Develop the sibling explicitly because Julia 1.10 ignores [sources].
+      # Develop the sibling checkout so CI tests against the current SNOPT.jl main.
       - uses: actions/checkout@v4
         with:
           path: OptimizationSNOPT

@@ -3,119 +3,97 @@
 [![CI](https://github.com/EllissoideRotondo/OptimizationSNOPT.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/EllissoideRotondo/OptimizationSNOPT.jl/actions/workflows/CI.yml)
 [![docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/)
 
-OptimizationSNOPT.jl connects [Optimization.jl](https://github.com/SciML/Optimization.jl)
-problems to [SNOPT](https://ccom.ucsd.edu/~optimizers/solvers/snopt/).
-SNOPT solves large, constrained nonlinear optimization problems.
+OptimizationSNOPT.jl connects [SNOPT](https://ccom.ucsd.edu/~optimizers/solvers/snopt/),
+a commercial solver for large, sparse, constrained nonlinear optimization problems, to
+[Optimization.jl](https://docs.sciml.ai/Optimization/stable/). A problem defined as an
+`OptimizationProblem` is solved with SNOPT by passing `SnoptOptimizer()` to `solve`,
+and the derivatives come from any automatic differentiation backend that
+Optimization.jl supports.
 
-Use [SNOPT.jl](https://github.com/EllissoideRotondo/SNOPT.jl) for direct access
-to SNOPT's native problem interfaces. Use this package for Optimization.jl
-problems and automatic differentiation.
-
-## Requirements
-
-- Julia 1.10 or later.
-- A licensed SNOPT 7 shared library that includes the C API provided by
-  [`snopt-interface`](https://github.com/snopt/snopt-interface).
-
-You must obtain the SNOPT library and license separately.
+With OptimizationSNOPT.jl, the same problem can be solved with SNOPT and with the
+other Optimization.jl solvers. The package is built on
+[SNOPT.jl](https://github.com/EllissoideRotondo/SNOPT.jl), which wraps the three SNOPT
+interfaces `snOptA`, `snOptB` and `snOptC`; use SNOPT.jl directly for linear constraints given separately,
+finite-difference derivatives estimated by SNOPT, or warm and hot starts.
 
 ## Installation
 
-Clone both repositories into the same directory:
+OptimizationSNOPT.jl needs Julia 1.11 or later and a licensed SNOPT 7.7 library,
+`libsnopt7`, that includes the [snopt-interface](https://github.com/snopt/snopt-interface)
+C functions. OptimizationSNOPT.jl does not include SNOPT; the library and the license
+are available from the SNOPT distributors.
 
-```bash
-git clone https://github.com/EllissoideRotondo/SNOPT.jl SNOPT
-git clone https://github.com/EllissoideRotondo/OptimizationSNOPT.jl OptimizationSNOPT
-julia --project=OptimizationSNOPT -e 'using Pkg; Pkg.develop(path="SNOPT"); Pkg.instantiate()'
+```julia
+using Pkg
+Pkg.add("OptimizationSNOPT")
 ```
 
-Set `SNOPTDIR` to the directory that contains the shared library:
+Before starting Julia, set `SNOPTDIR` to the directory that contains the library:
 
 ```bash
 export SNOPTDIR=/path/to/snopt/lib
 ```
 
-Windows PowerShell uses this equivalent command:
+The [installation guide](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/installation/)
+gives the Windows commands and the setup check.
 
-```powershell
-$env:SNOPTDIR = "C:\path\to\snopt\lib"
-```
+## Example
 
-From the OptimizationSNOPT.jl repository, verify library discovery:
-
-```bash
-julia --project=. -e 'using SNOPT; @assert SNOPT.has_snopt(); println("SNOPT is ready")'
-```
-
-The [SNOPT.jl installation guide](https://EllissoideRotondo.github.io/SNOPT.jl/dev/installation/)
-lists library names, search paths, licensing, and platform limits.
-
-## Getting started
-
-This example minimizes the Rosenbrock function with automatic differentiation:
+Minimize the Rosenbrock function, with the gradient from ForwardDiff.jl:
 
 ```julia
 using OptimizationSNOPT
 
 rosenbrock(x, p) = (p[1] - x[1])^2 + p[2] * (x[2] - x[1]^2)^2
 
-problem = OptimizationProblem(
-    OptimizationFunction(rosenbrock, AutoForwardDiff()),
-    zeros(2),
-    [1.0, 100.0],
-)
+f = OptimizationFunction(rosenbrock, AutoForwardDiff())
+prob = OptimizationProblem(f, [0.0, 0.0], [1.0, 100.0])
+sol = solve(prob, SnoptOptimizer())
 
-solution = solve(problem, SnoptOptimizer())
-solution.u
-solution.objective
-solution.retcode
+sol.retcode   # ReturnCode.Success
+sol.u         # ≈ [1.0, 1.0]
 ```
 
-Run the constrained worked example from the repository root:
+For bounds and nonlinear constraints, pass `lb`, `ub`, `lcons` and `ucons` to
+`OptimizationProblem` and `cons` to `OptimizationFunction`, as the
+[getting started tutorial](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/getting_started/)
+shows.
+
+## Documentation
+
+| Task | Function or keyword | Guide |
+| --- | --- | --- |
+| Solve a problem with bounds and constraints | `SnoptOptimizer`, `solve` | [Getting started](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/getting_started/) |
+| Make the SNOPT library available | `SNOPTDIR` | [Installation](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/installation/) |
+| Set tolerances, limits and SNOPT options | `maxiters`, `SnoptOptimizer` fields | [Set solver options](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/howto/options/) |
+| Print progress, store a trace or stop early | `verbose`, `store_trace`, `callback` | [Monitor and stop a solve](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/howto/monitoring/) |
+| Solve the same problem several times | `init`, `solve!`, `reinit!` | [Solve a problem several times](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/howto/cache/) |
+| Read return codes and SNOPT results | `sol.original` | [Solver behaviour](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/concepts/) |
+
+## Limits
+
+- One Julia process runs one SNOPT solve at a time. Use several processes for
+  parallel solves.
+- The constraint Jacobian is dense unless the backend is sparse, for example
+  `AutoSparse(AutoForwardDiff())`, or `cons_jac_prototype` gives its pattern.
+- Integer variables are relaxed to continuous variables, with a warning.
+
+[Solver behaviour](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/concepts/#Limits)
+lists all limits.
+
+## Build the documentation
+
+From the repository root:
 
 ```bash
-julia --project=. examples/hs71.jl
+julia --project=docs -e 'using Pkg; Pkg.instantiate()'
+julia --project=docs docs/make.jl
 ```
 
-## Solver configuration
-
-Pass common Optimization.jl keywords to `solve`. Pass SNOPT options to
-`SnoptOptimizer`.
-
-```julia
-optimizer = SnoptOptimizer(
-    major_iterations_limit = 2_000,
-    major_optimality_tolerance = 1.0e-8,
-    additional_options = Dict("Linesearch tolerance" => 0.9),
-)
-
-solution = solve(problem, optimizer; maxiters = 500, verbose = true)
-```
-
-OptimizationSNOPT supports bounds, nonlinear constraints, maximization, callbacks,
-cached solves, and iteration traces. See the
-[`SnoptOptimizer` API](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/api/)
-for accepted fields and common solve keywords.
-
-## Concurrency
-
-SNOPT owns one global Fortran workspace per process. This package serializes
-all solves with a lock. Threaded solves are safe, but they run sequentially.
-
-Use separate Julia processes for parallel solves.
-
-## Testing
-
-Run the full suite from the repository root:
-
-```bash
-julia --project=. -e 'using Pkg; Pkg.test()'
-```
-
-Solver tests run when Julia finds `libsnopt7`. Other tests remain available
-without the library.
+The build runs the examples in the manual when it finds the SNOPT library; set
+`SNOPT_DOCTESTS=false` to skip them. The pages are written to `docs/build/`.
 
 ## License
 
-OptimizationSNOPT.jl uses the MIT License. SNOPT is a separate commercial
-product. Its binaries are not distributed with this package.
+OptimizationSNOPT.jl is released under the MIT License. SNOPT is a separate commercial
+product with its own license, and its binaries are not distributed with this package.

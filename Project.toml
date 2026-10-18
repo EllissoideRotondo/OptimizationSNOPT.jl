@@ -24,7 +24,7 @@ SparseMatrixColorings = "0a514795-09f3-496d-8182-132a7b665d35"
 SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
 
 [sources]
-SNOPT = {path = "../SNOPT"}
+SNOPT = {path = "../SNOPT.jl"}
 
 [compat]
 ADTypes = "1"
@@ -49,7 +49,7 @@ SymbolicIndexingInterface = "0.3.40"
 Symbolics = "7"
 Test = "1.10"
 Zygote = "0.7"
-julia = "1.10"
+julia = "1.11"
 
 [extras]
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"

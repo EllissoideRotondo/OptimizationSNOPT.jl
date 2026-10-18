@@ -21,12 +21,15 @@ function validate_trace_frequency(name::Symbol, value)
 end
 
 """
-    SnoptTraceMinimal(; print_frequency=1, store_frequency=1)
+    SnoptTraceMinimal(; print_frequency = 1, store_frequency = 1)
+    SnoptTraceMinimal(frequency::Integer)
 
-Record scalar progress values during a solve.
+Trace level that prints and stores the scalar progress values of each major iteration.
 
-Both frequencies must be positive integers. `print_frequency` controls printed
-rows. `store_frequency` controls rows retained in [`SnoptTrace`](@ref).
+Pass it as the `trace_level` keyword of `solve`. A row is printed every
+`print_frequency` major iterations and stored every `store_frequency` major
+iterations; the second form sets both to `frequency`. Both must be positive integers.
+Stored rows have `x` and `c` set to `nothing`. See [Monitor and stop a solve](@ref).
 """
 function SnoptTraceMinimal(; print_frequency = 1, store_frequency = 1)
     print_frequency = validate_trace_frequency(:print_frequency, print_frequency)
@@ -35,12 +38,15 @@ function SnoptTraceMinimal(; print_frequency = 1, store_frequency = 1)
 end
 
 """
-    SnoptTraceAll(; print_frequency=1, store_frequency=1)
+    SnoptTraceAll(; print_frequency = 1, store_frequency = 1)
+    SnoptTraceAll(frequency::Integer)
 
-Record scalar progress, points, and constraint values during a solve.
+Trace level that also stores the point and the constraint values of each major
+iteration.
 
-Both frequencies must be positive integers. Full traces copy the point and
-constraint arrays for each stored row.
+The keywords are the same as for [`SnoptTraceMinimal`](@ref). Each stored row holds
+copies of `x` and `c`, and the printed table has an extra column with the largest
+bound violation.
 """
 function SnoptTraceAll(; print_frequency = 1, store_frequency = 1)
     print_frequency = validate_trace_frequency(:print_frequency, print_frequency)
@@ -56,10 +62,24 @@ SnoptTraceAll(freq::Integer) = SnoptTraceAll(;
 """
     SnoptTraceEntry
 
-One stored SNOPT iteration.
+One row of a [`SnoptTrace`](@ref).
 
-Unavailable numeric values are `NaN`. The final row may use `nothing` for
-vectors or status data that SNOPT did not provide.
+A value that is not available is `NaN`, or `nothing` for the vectors and the status.
+
+# Fields
+
+  - `iteration`: count of major-iteration records since the start of the solve,
+    including those not stored; `-1` for the final row.
+  - `major_iter`, `minor_iter`: number of the major iteration, and number of minor
+    iterations in it.
+  - `objective`: objective value of the original problem.
+  - `step_norm`: length of the last step.
+  - `constraint_violation`: constraint violation, as SNOPT measures it.
+  - `optimality`: error in the optimality conditions, as SNOPT measures it.
+  - `bound_violation`: largest violation of a variable bound.
+  - `x`: copy of the point, with [`SnoptTraceAll`](@ref) only.
+  - `c`: copy of the constraint values, with [`SnoptTraceAll`](@ref) only.
+  - `status`: SNOPT status code, in the final row only.
 """
 struct SnoptTraceEntry
     iteration::Int
@@ -78,10 +98,13 @@ end
 """
     SnoptTrace
 
-Stored iteration records and the trace level that produced them.
+Rows stored during a solve, available as `sol.trace` after
+`solve(prob, SnoptOptimizer(); store_trace = Val(true))`.
 
-Access a solve trace through `solution.trace` after passing
-`store_trace = Val(true)` to `solve`.
+# Fields
+
+  - `history`: vector of [`SnoptTraceEntry`](@ref), one per stored row.
+  - `trace_level`: the trace level of the solve.
 """
 struct SnoptTrace
     history::Vector{SnoptTraceEntry}
