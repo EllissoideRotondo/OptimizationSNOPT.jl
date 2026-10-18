@@ -24,17 +24,17 @@ needs. `OptimizationSNOPT` re-exports `OptimizationProblem`, `OptimizationFuncti
 `solve` and the automatic differentiation selectors, so no other package is loaded:
 
 ```jldoctest rosenbrock
-using OptimizationSNOPT
+julia> using OptimizationSNOPT
 
-rosenbrock(x, p) = (p[1] - x[1])^2 + p[2] * (x[2] - x[1]^2)^2
+julia> rosenbrock(x, p) = (p[1] - x[1])^2 + p[2] * (x[2] - x[1]^2)^2;
 
-f = OptimizationFunction(rosenbrock, AutoForwardDiff())
-prob = OptimizationProblem(f, [0.0, 0.0], [1.0, 100.0])
-sol = solve(prob, SnoptOptimizer())
-sol.retcode
+julia> f = OptimizationFunction(rosenbrock, AutoForwardDiff());
 
-# output
+julia> prob = OptimizationProblem(f, [0.0, 0.0], [1.0, 100.0]);
 
+julia> sol = solve(prob, SnoptOptimizer());
+
+julia> sol.retcode
 ReturnCode.Success = 1
 ```
 
@@ -44,10 +44,7 @@ ReturnCode.Success = 1
 `ReturnCode.Success`, so the point `sol.u` is the solution:
 
 ```jldoctest rosenbrock
-round.(sol.u; digits = 6)
-
-# output
-
+julia> round.(sol.u; digits = 6)
 2-element Vector{Float64}:
  1.0
  1.0
@@ -85,25 +82,25 @@ value per constraint into `res`. The keywords `lb` and `ub` bound the variables,
 equality constraint:
 
 ```jldoctest hs71
-using OptimizationSNOPT
+julia> using OptimizationSNOPT
 
-objective(x, p) = x[1] * x[4] * (x[1] + x[2] + x[3]) + x[3]
+julia> objective(x, p) = x[1] * x[4] * (x[1] + x[2] + x[3]) + x[3];
 
-function constraints!(res, x, p)
-    res[1] = x[1] * x[2] * x[3] * x[4]
-    res[2] = x[1]^2 + x[2]^2 + x[3]^2 + x[4]^2
-    return nothing
-end
+julia> function constraints!(res, x, p)
+           res[1] = x[1] * x[2] * x[3] * x[4]
+           res[2] = x[1]^2 + x[2]^2 + x[3]^2 + x[4]^2
+           return nothing
+       end;
 
-f = OptimizationFunction(objective, AutoForwardDiff(); cons = constraints!)
-prob = OptimizationProblem(f, [1.0, 5.0, 5.0, 1.0];
-                           lb = fill(1.0, 4), ub = fill(5.0, 4),
-                           lcons = [25.0, 40.0], ucons = [Inf, 40.0])
-sol = solve(prob, SnoptOptimizer())
-(sol.retcode, round(sol.objective; digits = 3))
+julia> f = OptimizationFunction(objective, AutoForwardDiff(); cons = constraints!);
 
-# output
+julia> prob = OptimizationProblem(f, [1.0, 5.0, 5.0, 1.0];
+                                  lb = fill(1.0, 4), ub = fill(5.0, 4),
+                                  lcons = [25.0, 40.0], ucons = [Inf, 40.0]);
 
+julia> sol = solve(prob, SnoptOptimizer());
+
+julia> (sol.retcode, round(sol.objective; digits = 3))
 (SciMLBase.ReturnCode.Success, 17.014)
 ```
 

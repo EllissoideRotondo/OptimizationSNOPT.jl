@@ -13,8 +13,9 @@ Optimization.jl supports.
 With OptimizationSNOPT.jl, the same problem can be solved with SNOPT and with the
 other Optimization.jl solvers. The package is built on
 [SNOPT.jl](https://github.com/EllissoideRotondo/SNOPT.jl), which wraps the three SNOPT
-interfaces `snOptA`, `snOptB` and `snOptC`; use SNOPT.jl directly for linear constraints given separately,
-finite-difference derivatives estimated by SNOPT, or warm and hot starts.
+interfaces `snOptA`, `snOptB` and `snOptC`; use SNOPT.jl directly for linear
+constraints given separately, finite-difference derivatives estimated by SNOPT, or warm
+and hot starts.
 
 ## Installation
 
@@ -41,17 +42,24 @@ gives the Windows commands and the setup check.
 
 Minimize the Rosenbrock function, with the gradient from ForwardDiff.jl:
 
-```julia
-using OptimizationSNOPT
+```julia-repl
+julia> using OptimizationSNOPT
 
-rosenbrock(x, p) = (p[1] - x[1])^2 + p[2] * (x[2] - x[1]^2)^2
+julia> rosenbrock(x, p) = (p[1] - x[1])^2 + p[2] * (x[2] - x[1]^2)^2;
 
-f = OptimizationFunction(rosenbrock, AutoForwardDiff())
-prob = OptimizationProblem(f, [0.0, 0.0], [1.0, 100.0])
-sol = solve(prob, SnoptOptimizer())
+julia> f = OptimizationFunction(rosenbrock, AutoForwardDiff());
 
-sol.retcode   # ReturnCode.Success
-sol.u         # ≈ [1.0, 1.0]
+julia> prob = OptimizationProblem(f, [0.0, 0.0], [1.0, 100.0]);
+
+julia> sol = solve(prob, SnoptOptimizer());
+
+julia> sol.retcode
+ReturnCode.Success = 1
+
+julia> round.(sol.u; digits = 6)
+2-element Vector{Float64}:
+ 1.0
+ 1.0
 ```
 
 For bounds and nonlinear constraints, pass `lb`, `ub`, `lcons` and `ucons` to
@@ -61,14 +69,12 @@ shows.
 
 ## Documentation
 
-| Task | Function or keyword | Guide |
-| --- | --- | --- |
-| Solve a problem with bounds and constraints | `SnoptOptimizer`, `solve` | [Getting started](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/getting_started/) |
-| Make the SNOPT library available | `SNOPTDIR` | [Installation](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/installation/) |
-| Set tolerances, limits and SNOPT options | `maxiters`, `SnoptOptimizer` fields | [Set solver options](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/howto/options/) |
-| Print progress, store a trace or stop early | `verbose`, `store_trace`, `callback` | [Monitor and stop a solve](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/howto/monitoring/) |
-| Solve the same problem several times | `init`, `solve!`, `reinit!` | [Solve a problem several times](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/howto/cache/) |
-| Read return codes and SNOPT results | `sol.original` | [Solver behaviour](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/concepts/) |
+The [documentation](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/)
+starts with a
+[tutorial](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/getting_started/)
+on bounds, nonlinear constraints and sparse Jacobians. It then gives how-to guides for
+solver options, monitoring and repeated solves, explains how SNOPT results map to
+Optimization.jl, and ends with the API reference.
 
 ## Limits
 
@@ -80,18 +86,6 @@ shows.
 
 [Solver behaviour](https://EllissoideRotondo.github.io/OptimizationSNOPT.jl/dev/concepts/#Limits)
 lists all limits.
-
-## Build the documentation
-
-From the repository root:
-
-```bash
-julia --project=docs -e 'using Pkg; Pkg.instantiate()'
-julia --project=docs docs/make.jl
-```
-
-The build runs the examples in the manual when it finds the SNOPT library; set
-`SNOPT_DOCTESTS=false` to skip them. The pages are written to `docs/build/`.
 
 ## License
 

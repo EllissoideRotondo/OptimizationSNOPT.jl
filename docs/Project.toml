@@ -5,7 +5,7 @@ SNOPT = "09fd284b-e7b0-4fba-b41f-c39527135ddd"
 
 [sources]
 OptimizationSNOPT = {path = ".."}
-SNOPT = {path = "../../SNOPT"}
+SNOPT = {path = "../../SNOPT.jl"}
 
 [compat]
 Documenter = "1"

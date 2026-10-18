@@ -27,14 +27,14 @@ jobs:
       # Develop the sibling checkout so CI tests against the current SNOPT.jl main.
       - uses: actions/checkout@v4
         with:
-          path: OptimizationSNOPT
+          path: OptimizationSNOPT.jl
       - uses: actions/checkout@v4
         with:
           repository: EllissoideRotondo/SNOPT.jl
-          path: SNOPT
+          path: SNOPT.jl
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}
       - uses: julia-actions/cache@v2
       - name: Instantiate and test
-        run: julia --project=OptimizationSNOPT -e 'using Pkg; Pkg.develop(path="SNOPT"); Pkg.instantiate(); Pkg.test("OptimizationSNOPT")'
+        run: julia --project=OptimizationSNOPT.jl -e 'using Pkg; Pkg.develop(path="SNOPT.jl"); Pkg.instantiate(); Pkg.test("OptimizationSNOPT")'

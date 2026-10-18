@@ -17,7 +17,7 @@ jobs:
       GIT_EXEC_PATH: /home/alex/.local/runner-git/usr/libexec/git-core
     defaults:
       run:
-        working-directory: OptimizationSNOPT
+        working-directory: OptimizationSNOPT.jl
     permissions:
       contents: write
       pull-requests: read
@@ -28,11 +28,11 @@ jobs:
         run: echo "/home/alex/.local/runner-git/usr/bin" >> "$GITHUB_PATH"
       - uses: actions/checkout@v4
         with:
-          path: OptimizationSNOPT
+          path: OptimizationSNOPT.jl
       - uses: actions/checkout@v4
         with:
           repository: EllissoideRotondo/SNOPT.jl
-          path: SNOPT
+          path: SNOPT.jl
       - uses: julia-actions/setup-julia@v2
         with:
           version: '1'
@@ -40,7 +40,7 @@ jobs:
       - name: Install documentation dependencies
         run: >-
           julia --project=docs -e
-          'using Pkg; Pkg.develop(path="../SNOPT");
+          'using Pkg; Pkg.develop(path="../SNOPT.jl");
           Pkg.develop(path="."); Pkg.instantiate()'
       - name: Build and deploy
         env:
