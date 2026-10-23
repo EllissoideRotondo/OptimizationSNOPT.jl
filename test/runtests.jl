@@ -51,6 +51,17 @@ end
         "Hessian" => "full memory",
     )) isa SnoptOptimizer
 
+    @testset "hessian = $(repr(hessian)) passes $(repr(expected))" for (hessian, expected) in (
+            (nothing, String[]),
+            ("full_memory", ["Hessian full memory"]),
+            ("limited_memory", ["Hessian limited memory"]),
+        )
+        opt = SnoptOptimizer(; hessian)
+        options = OptimizationSNOPT.snopt_optimizer_option_pairs(opt)
+        @test [key for (key, _) in options if startswith(key, "Hessian")] == expected
+    end
+    @test SnoptOptimizer().hessian === nothing
+
     opt = SnoptOptimizer()
     @test !SciMLBase.requireshessian(opt)
     @test !SciMLBase.requiresconshess(opt)

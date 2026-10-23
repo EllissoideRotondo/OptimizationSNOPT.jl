@@ -43,14 +43,20 @@ sol = solve(prob, opt)
 | `major_optimality_tolerance` | `1.0e-6` | `Major optimality tolerance` |
 | `major_feasibility_tolerance` | `1.0e-6` | `Major feasibility tolerance` |
 | `minor_feasibility_tolerance` | `1.0e-6` | `Minor feasibility tolerance` |
-| `hessian` | `"full_memory"` | `Hessian full memory` or `Hessian limited memory` |
+| `hessian` | `nothing` | None, `Hessian full memory` or `Hessian limited memory` |
 | `derivative_option` | `1` | `Derivative option`; keep the default |
 | `major_print_level`, `minor_print_level` | `1`, `0` | `Major print level`, `Minor print level` |
 | `additional_options` | empty | Any other option; see below |
 
 SNOPT approximates the Hessian of the Lagrangian from the change in the gradients
-between iterations. Use `hessian = "limited_memory"` for problems with many
-variables: SNOPT then keeps only a few recent updates instead of a full matrix.
+between iterations, either as a dense matrix (full memory) or from a few recent
+updates (limited memory). With the default `hessian = nothing`, no Hessian option is
+passed and SNOPT applies its own rule: full memory when the problem has at most 75
+nonlinear variables, limited memory otherwise. The dense update costs time and storage
+that grow with the square of the number of nonlinear variables, so set
+`hessian = "full_memory"` on a larger problem only when the limited-memory
+approximation needs many more major iterations. Set `hessian = "limited_memory"` to
+use the limited-memory update at any size.
 
 OptimizationSNOPT.jl does not write SNOPT's print file or summary file, so the print
 levels have no visible effect. To see the progress of a solve, use `verbose = true`

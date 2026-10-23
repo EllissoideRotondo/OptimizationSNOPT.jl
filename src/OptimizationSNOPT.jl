@@ -33,7 +33,7 @@ const SNOPT_GLOBAL_LOCK = SNOPT.SNOPT_LOCK
                    major_optimality_tolerance = 1.0e-6,
                    major_feasibility_tolerance = 1.0e-6,
                    minor_feasibility_tolerance = 1.0e-6,
-                   hessian = "full_memory", derivative_option = 1,
+                   hessian = nothing, derivative_option = 1,
                    major_print_level = 1, minor_print_level = 0,
                    additional_options = Dict{String, Any}())
 
@@ -52,8 +52,13 @@ from the `grad` and `cons_j` keywords of `OptimizationFunction`. See
   - `major_feasibility_tolerance`: tolerance on the nonlinear constraint violation.
   - `minor_feasibility_tolerance`: tolerance on the constraint violation in each
     subproblem.
-  - `hessian`: `"full_memory"` or `"limited_memory"`; use `"limited_memory"` for many
-    variables.
+  - `hessian`: Hessian approximation, `nothing`, `"full_memory"` or `"limited_memory"`.
+    With `nothing`, no Hessian option is passed and SNOPT applies its own rule: full
+    memory for at most 75 nonlinear variables, limited memory above. Pass
+    `"full_memory"` on a larger problem only when limited memory needs many more
+    major iterations; the dense update costs time and storage that grow with the
+    square of the number of nonlinear variables. Pass `"limited_memory"` to use the
+    limited-memory update at any size.
   - `derivative_option`: SNOPT `Derivative option`, `1`, `2` or `3`; keep the default.
   - `major_print_level`, `minor_print_level`: SNOPT print levels, nonnegative
     integers. SNOPT's print file is not written, so they have no visible effect.
@@ -99,7 +104,7 @@ sol = solve(prob, opt; maxiters = 500)
     # Derivative handling
     derivative_option::Int = 1
 
-    hessian::String = "full_memory"
+    hessian::Union{Nothing, String} = nothing
 
     additional_options::Dict{String, Any} = Dict{String, Any}()
 
@@ -204,11 +209,11 @@ function validate_derivative_option(value)
 end
 
 function validate_hessian_option(value)
-    value isa AbstractString ||
-        throw(ArgumentError("hessian must be \"full_memory\" or \"limited_memory\", got $(repr(value))"))
+    value === nothing && return nothing
+    message = "hessian must be `nothing`, \"full_memory\" or \"limited_memory\", got $(repr(value))"
+    value isa AbstractString || throw(ArgumentError(message))
     value = String(value)
-    value in ("full_memory", "limited_memory") ||
-        throw(ArgumentError("hessian must be \"full_memory\" or \"limited_memory\", got $(repr(value))"))
+    value in ("full_memory", "limited_memory") || throw(ArgumentError(message))
     return value
 end
 
@@ -321,7 +326,10 @@ function snopt_optimizer_option_pairs(
     push!(options, ("Major feasibility tolerance", major_feasibility_tolerance))
     push!(options, ("Minor feasibility tolerance", minor_feasibility_tolerance))
     push!(options, ("Derivative option", derivative_option))
-    push!(options, ("Hessian $(hessian_option_string(hessian))", nothing))
+    # Without a Hessian option, SNOPT chooses full or limited memory from the number
+    # of nonlinear variables.
+    hessian === nothing ||
+        push!(options, ("Hessian $(hessian_option_string(hessian))", nothing))
     for (key, value) in additional_options
         push!(options, (key, value))
     end

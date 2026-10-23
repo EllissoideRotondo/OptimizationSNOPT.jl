@@ -209,7 +209,16 @@ end
     x0 = [0.0, 0.0]
     p = [1.0, 100.0]
 
-    @testset "Hessian full memory (default)" begin
+    @testset "Hessian chosen by SNOPT (default)" begin
+        optfunc = OptimizationFunction(rosenbrock, AutoForwardDiff())
+        prob = OptimizationProblem(optfunc, x0, p)
+        sol = solve(prob, SnoptOptimizer(major_optimality_tolerance = 1e-8))
+
+        @test SciMLBase.successful_retcode(sol)
+        @test sol.u ≈ [1.0, 1.0]
+    end
+
+    @testset "Hessian full memory" begin
         optfunc = OptimizationFunction(rosenbrock, AutoForwardDiff())
         prob = OptimizationProblem(optfunc, x0, p)
         sol = solve(prob, SnoptOptimizer(hessian = "full_memory", major_optimality_tolerance = 1e-8))
